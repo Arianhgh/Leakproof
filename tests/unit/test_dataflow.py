@@ -52,3 +52,37 @@ def test_tuple_unpack_outputs_tracked():
     df = _flow(src)
     # X_res becomes FULL because it feeds the split
     assert df.taint_of("X_res") is Taint.FULL
+
+
+def test_fit_transform_output_usage_tracking():
+    src = (
+        "from sklearn.model_selection import cross_val_score\n"
+        "from sklearn.preprocessing import StandardScaler\n"
+        "X_scaled = StandardScaler().fit_transform(X)\n"
+        "cross_val_score(model, X_scaled, y)\n"
+    )
+    df = _flow(src)
+    fit = df.fit_calls[0]
+    assert df.fit_output_used_for_evaluation(fit)
+
+
+def test_unassigned_fit_transform_marked_as_demo():
+    src = (
+        "from sklearn.preprocessing import OneHotEncoder\n"
+        "ohe = OneHotEncoder()\n"
+        "ohe.fit_transform(df[['Sex']])\n"
+    )
+    df = _flow(src)
+    fit = df.fit_calls[0]
+    assert df.disconnected_fit_transform_demo(fit)
+
+
+def test_column_transformer_membership_marks_nested_transformer_safe():
+    src = (
+        "from sklearn.compose import ColumnTransformer\n"
+        "from sklearn.preprocessing import OneHotEncoder\n"
+        "enc = OneHotEncoder()\n"
+        "ct = ColumnTransformer([('enc', enc, ['city'])])\n"
+    )
+    df = _flow(src)
+    assert "enc" in df.scopes[0].pipelined_vars

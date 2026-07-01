@@ -8,10 +8,10 @@ from pathlib import Path
 
 
 class Severity(str, Enum):
-    CRITICAL = "critical"  # near-certain invalid results (e.g., exact train/test overlap)
-    HIGH = "high"  # very likely leakage (e.g., scaler fit on full X)
-    MEDIUM = "medium"  # probable problem or strong smell
-    LOW = "low"  # hygiene / advisory (missing seed)
+    CRITICAL = "critical"
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
     INFO = "info"
 
     @property
@@ -30,7 +30,7 @@ class Category(str, Enum):
     DATA_OVERLAP = "data_overlap"
     TARGET_LEAKAGE = "target_leakage"
     TEMPORAL = "temporal"
-    ADAPTIVITY = "adaptivity"  # test-set reuse / multiple comparisons
+    ADAPTIVITY = "adaptivity"
     METRIC = "metric"
     DETERMINISM = "determinism"
 
@@ -49,12 +49,12 @@ class Location:
     end_line: int | None = None
     end_col: int | None = None
     snippet: str | None = None
-    # for data/runtime findings that aren't tied to a source line:
-    context_label: str | None = None  # e.g., "train_test_split @ pipeline.py:42 run #2"
+    context_label: str | None = None
 
     def short(self) -> str:
         if self.file is not None and self.line is not None:
-            return f"{self.file}:{self.line}"
+            label = f" ({self.context_label})" if self.context_label else ""
+            return f"{self.file}:{self.line}{label}"
         if self.context_label:
             return self.context_label
         if self.file is not None:
@@ -64,27 +64,28 @@ class Location:
 
 @dataclass(frozen=True)
 class Fix:
-    summary: str  # one-line human description
-    suggested_diff: str | None = None  # unified diff, optional
+    summary: str
+    suggested_diff: str | None = None
     autofixable: bool = False
 
 
 @dataclass(frozen=True)
 class Finding:
-    rule_id: str  # e.g., "P001"
+    rule_id: str
     category: Category
     severity: Severity
     layer: Layer
-    message: str  # what + why, <= 2 sentences
+    message: str
     location: Location
     fix: Fix | None = None
-    confidence: float = 1.0  # 0..1; static heuristics may be < 1
-    references: tuple[str, ...] = ()  # doc anchors / paper URLs
-    evidence: dict = field(default_factory=dict)  # rule-specific structured data
+    confidence: float = 1.0
+    references: tuple[str, ...] = ()
+    evidence: dict = field(default_factory=dict)
+    gateable: bool | None = None
+    profile: str | None = None
 
     @property
     def key(self) -> tuple:
-        # used for dedupe across layers
         return (
             self.rule_id,
             str(self.location.file),
@@ -94,7 +95,7 @@ class Finding:
 
     def to_dict(self) -> dict:
         loc = self.location
-        return {
+        out = {
             "rule_id": self.rule_id,
             "category": self.category.value,
             "severity": self.severity.value,
@@ -122,3 +123,8 @@ class Finding:
                 else None
             ),
         }
+        if self.gateable is not None:
+            out["gateable"] = self.gateable
+        if self.profile is not None:
+            out["profile"] = self.profile
+        return out

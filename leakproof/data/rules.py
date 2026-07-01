@@ -20,6 +20,15 @@ def _second_highest(mi: dict[str, float], exclude: str) -> float:
     return max(others) if others else 0.0
 
 
+def _hash_columns(ctx: DataContext) -> list[str]:
+    ai = ctx.audit_input
+    base = ai.feature_columns() + ([ai.target] if ai.target else [])
+    include = ctx.config.data.hash_include
+    cols = [c for c in include if c in ai.train.columns] if include else base
+    exclude = set(ctx.config.data.hash_exclude)
+    return [c for c in cols if c not in exclude]
+
+
 @register
 class D001(DataRule):
     id = "D001"
@@ -37,13 +46,16 @@ class D001(DataRule):
         from .hashing import overlap, row_hashes
 
         ai = ctx.audit_input
-        cols = ai.feature_columns() + ([ai.target] if ai.target else [])
+        cols = _hash_columns(ctx)
+        if not cols:
+            return
         cap = ctx.config.data.sample_cap
         th = row_hashes(ai.train, cols, sample_cap=cap)
         sh = row_hashes(ai.test, cols, sample_cap=cap)
         common, count = overlap(th, sh)
         if count > 0:
             frac = count / max(1, len(ai.test))
+            sampled = bool(th.attrs.get("sampled") or sh.attrs.get("sampled"))
             yield Finding(
                 rule_id=self.id,
                 category=self.category,
@@ -54,14 +66,15 @@ class D001(DataRule):
                     f"results are invalid until they are removed."
                 ),
                 location=_loc(f"train/test overlap ({count} rows)"),
-                confidence=1.0,
+                confidence=0.8 if sampled else 1.0,
                 references=self.references,
                 fix=Fix(summary="Deduplicate before splitting; drop overlapping rows from test.", autofixable=False),
                 evidence={
                     "overlap_rows": count,
                     "overlap_fraction": frac,
                     "unique_overlapping_hashes": len(common),
-                    "sampled": bool(th.attrs.get("sampled") or sh.attrs.get("sampled")),
+                    "sampled": sampled,
+                    "hash_columns": cols,
                 },
             )
 
@@ -122,12 +135,15 @@ class D007(DataRule):
         from .hashing import row_hashes
 
         ai = ctx.audit_input
-        cols = ai.feature_columns() + ([ai.target] if ai.target else [])
+        cols = _hash_columns(ctx)
+        if not cols:
+            return
         h = row_hashes(ai.test, cols, sample_cap=ctx.config.data.sample_cap)
         counts = h.value_counts()
         dup_rows = int((counts[counts > 1] - 1).sum()) if (counts > 1).any() else 0
         if dup_rows > 0:
             frac = dup_rows / max(1, len(ai.test))
+            sampled = bool(h.attrs.get("sampled"))
             yield Finding(
                 rule_id=self.id,
                 category=self.category,
@@ -138,10 +154,15 @@ class D007(DataRule):
                     f"test size is smaller than it appears."
                 ),
                 location=_loc(f"test duplicates ({dup_rows} rows)"),
-                confidence=0.9,
+                confidence=0.7 if sampled else 0.9,
                 references=self.references,
                 fix=Fix(summary="Deduplicate the test set.", autofixable=False),
-                evidence={"duplicate_rows": dup_rows, "fraction": frac},
+                evidence={
+                    "duplicate_rows": dup_rows,
+                    "fraction": frac,
+                    "sampled": sampled,
+                    "hash_columns": cols,
+                },
             )
 
 
@@ -159,7 +180,7 @@ class D002(DataRule):
     )
 
     def check(self, ctx: DataContext) -> Iterable[Finding]:
-        from .neardup import numeric_near_duplicates, text_near_duplicates
+        from .neardup import image_near_duplicates, numeric_near_duplicates, text_near_duplicates
 
         ai = ctx.audit_input
         cfg = ctx.config.data
@@ -167,12 +188,25 @@ class D002(DataRule):
         if not feats:
             return
 
-        text_cols = [c for c in feats if str(ai.train[c].dtype) == "object"]
+        feature_types = ai.feature_types or {}
+        image_cols = [
+            c for c in feats
+            if feature_types.get(c) == "image" or self._looks_like_image_path(ai.train[c])
+        ]
+        text_cols = [c for c in feats if str(ai.train[c].dtype) == "object" and c not in image_cols]
         numeric_cols = [c for c in feats if c not in text_cols]
 
         pairs: list[tuple[int, int, float]] = []
         modality = None
-        if text_cols:
+        if image_cols:
+            col = image_cols[0]
+            pairs = image_near_duplicates(
+                ai.train[col].astype(str).tolist(),
+                ai.test[col].astype(str).tolist(),
+                cfg.imagehash_distance,
+            )
+            modality = f"image:{col}"
+        elif text_cols:
             col = text_cols[0]
             pairs = text_near_duplicates(
                 ai.train[col].astype(str).tolist(),
@@ -212,6 +246,16 @@ class D002(DataRule):
                     "examples": [[int(i), int(j), round(s, 4)] for i, j, s in pairs[:5]],
                 },
             )
+
+    def _looks_like_image_path(self, series) -> bool:
+        try:
+            sample = series.dropna().astype(str).head(20).str.lower()
+        except Exception:
+            return False
+        if sample.empty:
+            return False
+        suffixes = (".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp", ".tif", ".tiff")
+        return bool(sample.map(lambda value: value.endswith(suffixes)).mean() >= 0.8)
 
 
 @register

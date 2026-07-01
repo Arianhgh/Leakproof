@@ -1,8 +1,4 @@
-"""wrapt-based instrumentation of sklearn for runtime taint tracking.
-
-All patches are installed and removed within a session; instrumentation failures
-degrade to a warning and never crash the user's run.
-"""
+"""Runtime hooks for split/fit/score row tracking."""
 
 from __future__ import annotations
 
@@ -13,7 +9,6 @@ from collections.abc import Callable
 
 def _call_site() -> str:
     try:
-        # walk out of leakproof frames to the user's call site
         for frame in inspect.stack()[2:]:
             fn = frame.filename
             if "leakproof" + "/" not in fn.replace("\\", "/") and "/wrapt/" not in fn:
@@ -24,8 +19,6 @@ def _call_site() -> str:
 
 
 class HookManager:
-    """Installs/removes sklearn patches and routes events to a session."""
-
     def __init__(self, session: RuntimeSession):  # type: ignore[name-defined]  # noqa: F821
         self.session = session
         self._patches: list[tuple[object, str, object]] = []
@@ -45,11 +38,23 @@ class HookManager:
 
         self._wrap(wrapt, ms, "train_test_split", self._on_split)
         self._wrap_method(wrapt, "sklearn.base", "BaseEstimator", "fit", self._on_fit)
-        # fit_transform/predict/score live on mix-ins; patch defensively
         for cls_path, method, handler in [
             ("sklearn.base.TransformerMixin", "fit_transform", self._on_fit),
             ("sklearn.base.ClassifierMixin", "score", self._on_score),
             ("sklearn.base.RegressorMixin", "score", self._on_score),
+            ("sklearn.pipeline.Pipeline", "fit", self._on_fit),
+            ("sklearn.pipeline.Pipeline", "fit_transform", self._on_fit),
+            ("sklearn.pipeline.Pipeline", "score", self._on_score),
+            ("imblearn.pipeline.Pipeline", "fit", self._on_fit),
+            ("imblearn.pipeline.Pipeline", "fit_resample", self._on_fit),
+            ("xgboost.sklearn.XGBClassifier", "fit", self._on_fit),
+            ("xgboost.sklearn.XGBClassifier", "score", self._on_score),
+            ("xgboost.sklearn.XGBRegressor", "fit", self._on_fit),
+            ("xgboost.sklearn.XGBRegressor", "score", self._on_score),
+            ("lightgbm.sklearn.LGBMClassifier", "fit", self._on_fit),
+            ("lightgbm.sklearn.LGBMClassifier", "score", self._on_score),
+            ("lightgbm.sklearn.LGBMRegressor", "fit", self._on_fit),
+            ("lightgbm.sklearn.LGBMRegressor", "score", self._on_score),
         ]:
             mod, cls = cls_path.rsplit(".", 1)
             self._wrap_method(wrapt, mod, cls, method, handler)
@@ -102,11 +107,9 @@ class HookManager:
                 pass
         self._patches.clear()
 
-    # --- event handlers ------------------------------------------------
     def _on_split(self, args, kwargs, result, instance) -> None:
         from .taint import row_hashes
 
-        # train_test_split(X, y, ...) -> [X_train, X_test, y_train, y_test, ...]
         if not args:
             return
         args[0]

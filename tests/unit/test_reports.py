@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from leakproof.core.aggregate import summarize
+from leakproof.core.aggregate import annotate_gateability, summarize
 from leakproof.core.models import Category, Finding, Layer, Location, Severity
 from leakproof.report import json_report, markdown, sarif, terminal
 
@@ -31,16 +31,23 @@ def _findings():
 
 
 def test_json_schema():
-    f = _findings()
-    s = summarize(f, Severity.HIGH)
+    f = annotate_gateability(
+        _findings(), gate=Severity.HIGH, gate_confidence=0.75, profile="ci"
+    )
+    s = summarize(f, Severity.HIGH, 0.75)
     obj = json.loads(json_report.render(f, s))
     assert obj["version"] == json_report.SCHEMA_VERSION
     assert len(obj["findings"]) == 2
     assert obj["summary"]["total"] == 2
+    assert obj["summary"]["gate_confidence"] == 0.75
+    assert obj["findings"][0]["gateable"] is True
+    assert obj["findings"][0]["profile"] == "ci"
 
 
 def test_sarif_structure():
-    f = _findings()
+    f = annotate_gateability(
+        _findings(), gate=Severity.HIGH, gate_confidence=0.75, profile="ci"
+    )
     obj = json.loads(sarif.render(f))
     assert obj["version"] == "2.1.0"
     run = obj["runs"][0]
@@ -54,13 +61,18 @@ def test_sarif_structure():
     # critical maps to error
     levels = {r["ruleId"]: r["level"] for r in run["results"]}
     assert levels["D001"] == "error"
+    props = run["results"][0]["properties"]
+    assert "gateable" in props and "profile" in props and "evidence" in props
 
 
 def test_markdown_and_terminal_render():
-    f = _findings()
-    s = summarize(f, Severity.HIGH)
+    f = annotate_gateability(
+        _findings(), gate=Severity.HIGH, gate_confidence=0.75, profile="ci"
+    )
+    s = summarize(f, Severity.HIGH, 0.75)
     md = markdown.render(f, s)
     assert "leakproof report" in md
     assert "P001" in md
+    assert "gateable" in md
     txt = terminal.render(f, s, color=False)
     assert "P001" in txt and "D001" in txt

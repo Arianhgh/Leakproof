@@ -1,19 +1,4 @@
-"""Def-use and taint analysis for static leakage rules.
-
-The static rules need more context than "a fit call appears near a split call." This
-module records, per scope, where symbols came from:
-
-  FULL    - data that predates a split, or combines both sides of one
-  TRAIN   - derived from the training side only
-  TEST    - derived from the test side only
-  VAL     - derived from the validation side only
-  UNKNOWN - not resolved by the lightweight analysis
-
-Rules consume the structured records produced here: fit calls, split events, concats,
-pipeline membership, and generic call records. The analysis is intentionally
-intra-procedural; imports are resolved module-wide, but each function body is analyzed in
-its own scope.
-"""
+"""Small def-use/taint pass used by the static rules."""
 
 from __future__ import annotations
 
@@ -41,20 +26,18 @@ class Taint(str, Enum):
 
 @dataclass
 class FitCall:
-    """A call to a learning method (fit/fit_transform/...)."""
-
     node: ast.Call
     line: int
     col: int
     method: str
-    class_name: str | None  # resolved estimator/transformer class if known
-    receiver_var: str | None  # variable the object is bound to, if any
-    arg_vars: list[str]  # variable names passed as positional data args
+    class_name: str | None
+    receiver_var: str | None
+    arg_vars: list[str]
     arg_taints: list[Taint]
-    output_vars: list[str]  # variables the call result is assigned to, if any
+    output_vars: list[str]
     output_taints: list[Taint]
-    in_pipeline: bool  # transformer is inside a Pipeline/make_pipeline
-    in_cv: bool  # the fit happens via a CV utility (cross_val_score, ...)
+    in_pipeline: bool
+    in_cv: bool
     is_transformer: bool
     is_estimator: bool
     is_resampler: bool
@@ -82,11 +65,9 @@ class ConcatAssign:
 
 @dataclass
 class CallRecord:
-    """A generic resolved call (for rules that scan constructors/metrics)."""
-
     node: ast.Call
     line: int
-    func_name: str  # resolved tail name
+    func_name: str
     keywords: dict[str, ast.expr]
     arg_vars: list[str]
     arg_taints: list[Taint]
@@ -100,15 +81,11 @@ class ScopeFlow:
     splits: list[SplitEvent] = field(default_factory=list)
     concats: list[ConcatAssign] = field(default_factory=list)
     calls: list[CallRecord] = field(default_factory=list)
-    # var -> set of class names of objects bound (StandardScaler() -> {StandardScaler})
     var_classes: dict[str, str] = field(default_factory=dict)
-    # vars that are transformer objects placed inside a pipeline
     pipelined_vars: set[str] = field(default_factory=set)
 
 
 class DataFlow:
-    """Whole-module imports plus one flow graph per executable scope."""
-
     def __init__(self, tree: ast.AST, adapters: AdapterRegistry, source_lines: list[str]):
         self.tree = tree
         self.adapters = adapters
@@ -127,8 +104,6 @@ class DataFlow:
                     self.imports[local] = alias.name
             elif isinstance(node, ast.ImportFrom):
                 module = node.module or ""
-                # mark relative imports with leading dots so a local submodule
-                # named e.g. ``torch`` is not mistaken for the torch package.
                 prefix = "." * (node.level or 0)
                 for alias in node.names:
                     local = alias.asname or alias.name
@@ -292,7 +267,6 @@ class DataFlow:
         return Taint.UNKNOWN
 
     def _infer_taint(self, expr: ast.expr, scope: ScopeFlow) -> Taint:
-        """Propagate taint through simple derivations."""
         names = [n.id for n in ast.walk(expr) if isinstance(n, ast.Name)]
         labels = {scope.taints.get(n) for n in names if n in scope.taints}
         labels.discard(None)
@@ -431,11 +405,6 @@ class DataFlow:
 
     @staticmethod
     def leak_taint(fit: FitCall) -> Taint | None:
-        """Return the offending taint if this fit consumes/produces leaky data.
-
-        A fit leaks when its input *or* its output derives from pre-split (FULL)
-        data or from the eval side (TEST/VAL).
-        """
         for t in [*fit.arg_taints, *fit.output_taints]:
             if t is Taint.FULL or t.is_eval_side:
                 return t
@@ -460,6 +429,41 @@ class DataFlow:
     def uses_cv_utility(self) -> bool:
         return any(self.adapters.is_search_constructor(c.func_name) for c in self.calls)
 
+    def evaluation_input_vars(self) -> set[str]:
+        out: set[str] = set()
+        for split in self.splits:
+            out.update(split.input_vars)
+        for fit in self.fit_calls:
+            cls = fit.class_name or ""
+            if fit.is_estimator or self.adapters.is_search_constructor(cls):
+                out.update(fit.arg_vars)
+        metrics = set(self.adapters.metrics)
+        eval_calls = {
+            "cross_val_score",
+            "cross_validate",
+            "cross_val_predict",
+            "score",
+            "predict",
+            "predict_proba",
+            "decision_function",
+        }
+        for c in self.calls:
+            if (
+                self.adapters.is_search_constructor(c.func_name)
+                or c.func_name in metrics
+                or c.func_name in eval_calls
+            ):
+                out.update(c.arg_vars)
+        return out
+
+    def fit_output_used_for_evaluation(self, fit: FitCall) -> bool:
+        if not fit.output_vars:
+            return False
+        return bool(set(fit.output_vars) & self.evaluation_input_vars())
+
+    def disconnected_fit_transform_demo(self, fit: FitCall) -> bool:
+        return fit.method == "fit_transform" and not self.fit_output_used_for_evaluation(fit)
+
     def scope_of_line(self, line: int) -> ScopeFlow | None:
         for s in self.scopes:
             for rec in s.fit_calls:
@@ -472,7 +476,6 @@ _SCOPE_BOUNDARIES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
 
 
 def _scope_nodes(tree: ast.AST) -> Iterator[ast.AST]:
-    """Yield nodes for the current scope without descending into nested scopes."""
     initial = list(reversed(getattr(tree, "body", [tree])))
     stack: list[ast.AST] = initial
     while stack:
@@ -496,11 +499,6 @@ def _assign_targets(stmt: ast.Assign) -> list[str]:
 
 
 def _split_output_taints(targets: list[str]) -> list[Taint]:
-    """train_test_split returns [in0_train, in0_test, in1_train, in1_test, ...].
-
-    Prefer explicit name suffixes; fall back to position parity (even=train,
-    odd=test).
-    """
     out: list[Taint] = []
     for i, name in enumerate(targets):
         by_name = DataFlow._name_taint(name)

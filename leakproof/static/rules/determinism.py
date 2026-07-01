@@ -9,7 +9,7 @@ from ...core.context import StaticContext
 from ...core.models import Category, Finding, Fix, Layer, Severity
 from ...core.registry import register
 from ...core.rule import StaticRule
-from ._helpers import location_of, notebook_note
+from ._helpers import has_kwarg, kwarg_is_true, location_of, notebook_note
 
 _SEED_KWARGS = ("random_state", "seed", "random_seed")
 
@@ -35,6 +35,8 @@ class R001(StaticRule):
             if any(k in c.keywords for k in _SEED_KWARGS):
                 continue
             if self._has_star_kwargs(c.node):
+                continue
+            if not self._call_needs_local_seed(c):
                 continue
             # if a global np/random seed is set, downgrade train_test_split noise
             if global_seed and c.func_name not in ("train_test_split",):
@@ -73,6 +75,23 @@ class R001(StaticRule):
 
     def _has_star_kwargs(self, node: ast.Call) -> bool:
         return any(kw.arg is None for kw in node.keywords)
+
+    def _call_needs_local_seed(self, call) -> bool:
+        if call.func_name in {"KFold", "StratifiedKFold"}:
+            return kwarg_is_true(has_kwarg(call.node, "shuffle"))
+        if call.func_name == "LogisticRegression":
+            solver = self._constant_kwarg(call.node, "solver")
+            solver = solver or "lbfgs"
+            return solver in {"liblinear", "sag", "saga"}
+        if call.func_name == "SVC":
+            return kwarg_is_true(has_kwarg(call.node, "probability"))
+        return True
+
+    def _constant_kwarg(self, node: ast.Call, name: str):
+        value = has_kwarg(node, name)
+        if isinstance(value, ast.Constant):
+            return value.value
+        return None
 
 
 @register

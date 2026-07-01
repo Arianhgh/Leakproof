@@ -43,7 +43,6 @@ class M004(StaticRule, RuntimeRule):
         for node in ast.walk(ctx.tree):
             if not isinstance(node, ast.Call):
                 continue
-            # metric_func(y_train, preds)
             fname = ctx.dataflow.resolve_name(node.func)
             tail = fname.rsplit(".", 1)[-1] if fname else None
             if tail in metrics:
@@ -51,7 +50,6 @@ class M004(StaticRule, RuntimeRule):
                 if _arg_taint(node, y_true_idx, ctx) is Taint.TRAIN:
                     yield self._make(node, ctx, tail)
                 continue
-            # model.score(X_train, y_train)
             if isinstance(node.func, ast.Attribute) and node.func.attr == "score":
                 if any(_arg_taint(node, i, ctx) is Taint.TRAIN for i in range(min(2, len(node.args)))):
                     yield self._make(node, ctx, "score")
@@ -127,8 +125,6 @@ class M002(StaticRule):
             tail = fname.rsplit(".", 1)[-1] if fname else None
             if tail not in self._CURVE_FUNCS:
                 continue
-            # only the TEST split is a problem; tuning a threshold on a dedicated
-            # validation split is correct practice.
             if _arg_taint(node, 0, ctx) is Taint.TEST:
                 yield Finding(
                     rule_id=self.id,
@@ -162,37 +158,90 @@ class M003(StaticRule):
     )
 
     def check(self, ctx: StaticContext) -> Iterable[Finding]:
-        uses_cv = any(
-            c.func_name in ("cross_val_score", "cross_validate") for c in ctx.dataflow.calls
-        )
-        if not uses_cv:
+        cv_score_vars = self._cv_score_vars(ctx)
+        mean_nodes = self._cv_mean_nodes(ctx, cv_score_vars)
+        cv_results_mean_nodes = self._cv_results_mean_nodes(ctx)
+        if not mean_nodes and not cv_results_mean_nodes:
             return
-        reports_mean = False
-        reports_spread = False
-        mean_node = None
+        if self._reports_spread(ctx, cv_score_vars):
+            return
+        node = mean_nodes[0] if mean_nodes else cv_results_mean_nodes[0]
+        yield Finding(
+            rule_id=self.id,
+            category=self.category,
+            severity=self.severity,
+            layer=Layer.STATIC,
+            message=(
+                "Cross-validation scores are summarized by mean only; also report the "
+                "standard deviation / confidence interval." + notebook_note(ctx)
+            ),
+            location=location_of(node, ctx),
+            confidence=0.4,
+            references=self.references,
+            fix=Fix(summary="Report scores.std() alongside scores.mean().", autofixable=False),
+            evidence={},
+        )
+
+    def _cv_score_vars(self, ctx: StaticContext) -> set[str]:
+        out: set[str] = set()
         for node in ast.walk(ctx.tree):
-            if isinstance(node, ast.Attribute):
-                if node.attr in ("mean",):
-                    reports_mean = True
-                    mean_node = mean_node or node
-                if node.attr in ("std", "var", "sem", "quantile"):
-                    reports_spread = True
+            if not isinstance(node, ast.Assign):
+                continue
+            if not isinstance(node.value, ast.Call):
+                continue
+            tail = self._call_tail(node.value, ctx)
+            if tail not in {"cross_val_score", "cross_validate"}:
+                continue
+            for target in node.targets:
+                for sub in ast.walk(target):
+                    if isinstance(sub, ast.Name):
+                        out.add(sub.id)
+        return out
+
+    def _cv_mean_nodes(self, ctx: StaticContext, cv_score_vars: set[str]) -> list[ast.AST]:
+        out: list[ast.AST] = []
+        for node in ast.walk(ctx.tree):
+            if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)):
+                continue
+            if node.func.attr != "mean":
+                continue
+            receiver = node.func.value
+            if isinstance(receiver, ast.Call) and self._call_tail(receiver, ctx) in {
+                "cross_val_score",
+                "cross_validate",
+            }:
+                out.append(node)
+            elif isinstance(receiver, ast.Name) and receiver.id in cv_score_vars:
+                out.append(node)
+        return out
+
+    def _cv_results_mean_nodes(self, ctx: StaticContext) -> list[ast.AST]:
+        out: list[ast.AST] = []
+        for node in ast.walk(ctx.tree):
+            if isinstance(node, ast.Constant) and node.value == "mean_test_score":
+                out.append(node)
+        return out
+
+    def _reports_spread(self, ctx: StaticContext, cv_score_vars: set[str]) -> bool:
+        for node in ast.walk(ctx.tree):
+            if isinstance(node, ast.Constant) and node.value == "std_test_score":
+                return True
             if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
-                if node.func.attr in ("std", "var", "sem"):
-                    reports_spread = True
-        if reports_mean and not reports_spread and mean_node is not None:
-            yield Finding(
-                rule_id=self.id,
-                category=self.category,
-                severity=self.severity,
-                layer=Layer.STATIC,
-                message=(
-                    "Cross-validation scores are summarized by mean only; also report the "
-                    "standard deviation / confidence interval." + notebook_note(ctx)
-                ),
-                location=location_of(mean_node, ctx),
-                confidence=0.4,
-                references=self.references,
-                fix=Fix(summary="Report scores.std() alongside scores.mean().", autofixable=False),
-                evidence={},
-            )
+                if node.func.attr in ("std", "var", "sem", "quantile"):
+                    receiver = node.func.value
+                    if isinstance(receiver, ast.Name) and receiver.id in cv_score_vars:
+                        return True
+                    if isinstance(receiver, ast.Call) and self._call_tail(receiver, ctx) in {
+                        "cross_val_score",
+                        "cross_validate",
+                    }:
+                        return True
+            if isinstance(node, ast.Call):
+                tail = self._call_tail(node, ctx)
+                if tail in {"std", "var", "sem", "quantile"}:
+                    return True
+        return False
+
+    def _call_tail(self, node: ast.Call, ctx: StaticContext) -> str | None:
+        fname = ctx.dataflow.resolve_name(node.func)
+        return fname.rsplit(".", 1)[-1] if fname else None

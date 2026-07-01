@@ -1,8 +1,4 @@
-"""Optional LLM triage for code the static layer could not parse or resolve.
-
-Candidates are returned at reduced confidence and marked `llm-triage`; they never gate CI
-by default and are re-verified by the deterministic layers where possible.
-"""
+"""Low-confidence LLM hints for files the static layer could not parse."""
 
 from __future__ import annotations
 
@@ -44,7 +40,12 @@ def triage_file(path: Path, config: Config) -> list[Finding]:
                 message=f"[llm-triage] {item.get('reason', 'possible leakage site')}",
                 location=Location(file=path, line=int(item.get("line", 1) or 1)),
                 confidence=0.3,
-                evidence={"source": "llm-triage", "proposed_rule": rid},
+                evidence={
+                    "source": "llm-triage",
+                    "proposed_rule": rid,
+                    "reason_codes": ["llm-triage", "non-gateable"],
+                },
+                gateable=False,
             )
         )
     return out

@@ -7,6 +7,9 @@ from leakproof.core.models import Layer, Severity
 def test_defaults():
     cfg = Config()
     assert cfg.fail_on is Severity.HIGH
+    assert cfg.min_confidence == 0.0
+    assert cfg.gate_confidence == 0.75
+    assert cfg.profile == "ci"
     assert cfg.select == ["ALL"]
     assert Layer.STATIC in cfg.layers
 
@@ -18,6 +21,9 @@ def test_merge_from_table():
             "select": ["P001", "D*"],
             "ignore": ["R001"],
             "fail_on": "critical",
+            "min_confidence": 0.4,
+            "gate_confidence": 0.9,
+            "profile": "research",
             "layers": ["static"],
             "severity": {"S002": "low"},
             "data": {"imbalance_ratio": 0.8},
@@ -27,6 +33,9 @@ def test_merge_from_table():
     assert cfg.select == ["P001", "D*"]
     assert cfg.ignore == ["R001"]
     assert cfg.fail_on is Severity.CRITICAL
+    assert cfg.min_confidence == 0.4
+    assert cfg.gate_confidence == 0.9
+    assert cfg.profile == "research"
     assert cfg.layers == [Layer.STATIC]
     assert cfg.severity_overrides["S002"] == "low"
     assert cfg.data.imbalance_ratio == 0.8
@@ -44,8 +53,19 @@ def test_load_from_pyproject(tmp_path):
 
 def test_apply_cli_overrides():
     cfg = Config()
-    cfg.apply_cli(select=["C001"], ignore=["R001"], layers=["static", "data"], fail_on="low")
+    cfg.apply_cli(
+        select=["C001"],
+        ignore=["R001"],
+        layers=["static", "data"],
+        fail_on="low",
+        min_confidence=0.3,
+        gate_confidence=0.8,
+        profile="notebook",
+    )
     assert cfg.select == ["C001"]
     assert "R001" in cfg.ignore
     assert cfg.layers == [Layer.STATIC, Layer.DATA]
     assert cfg.fail_on is Severity.LOW
+    assert cfg.min_confidence == 0.3
+    assert cfg.gate_confidence == 0.8
+    assert cfg.profile == "notebook"

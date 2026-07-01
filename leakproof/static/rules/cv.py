@@ -11,7 +11,7 @@ from ...core.references import KAPOOR_NARAYANAN_2023, SKLEARN_CV, SKLEARN_PITFAL
 from ...core.registry import register
 from ...core.rule import RuntimeRule, StaticRule
 from ..dataflow import Taint
-from ._helpers import has_kwarg, location_of, notebook_note
+from ._helpers import has_kwarg, location_of, notebook_note, text_has_hint
 
 _GROUP_HINTS = (
     "group",
@@ -30,9 +30,9 @@ _TIME_HINTS = ("date", "time", "timestamp", "datetime", "_dt")
 def _string_or_name_hits(ctx: StaticContext, hints: tuple[str, ...]) -> bool:
     for node in ast.walk(ctx.tree):
         if isinstance(node, ast.Constant) and isinstance(node.value, str):
-            if any(h in node.value.lower() for h in hints):
+            if text_has_hint(node.value, hints):
                 return True
-        if isinstance(node, ast.Name) and any(h in node.id.lower() for h in hints):
+        if isinstance(node, ast.Name) and text_has_hint(node.id, hints):
             return True
     return False
 
@@ -68,6 +68,8 @@ class C001(StaticRule):
             if fit.in_pipeline:
                 continue
             if not (fit.is_transformer or fit.is_feature_selector):
+                continue
+            if ctx.dataflow.disconnected_fit_transform_demo(fit):
                 continue
             cls = fit.class_name or "transformer"
             yield Finding(

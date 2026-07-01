@@ -25,12 +25,6 @@ def _normalize_cell(v: Any) -> str:
 
 
 def row_hashes(df, columns: list[str] | None = None, sample_cap: int | None = None):
-    """Return a pandas Series of stable per-row hashes.
-
-    Hashing is over the given columns (default: all). For frames larger than
-    ``sample_cap`` we hash a deterministic head sample and the caller notes the
-    reduced confidence.
-    """
     import pandas as pd  # noqa: F401
 
     cols = columns if columns is not None else list(df.columns)
@@ -50,7 +44,6 @@ def row_hashes(df, columns: list[str] | None = None, sample_cap: int | None = No
 
 
 def overlap(train_hashes, test_hashes) -> tuple[set[str], int]:
-    """Return (overlapping hashes, count of overlapping test rows)."""
     train_set = set(train_hashes.tolist())
     test_list = test_hashes.tolist()
     common = train_set.intersection(test_list)

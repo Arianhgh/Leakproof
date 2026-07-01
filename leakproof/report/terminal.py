@@ -28,7 +28,7 @@ def _emit(console, findings: list[Finding], summary: Summary) -> None:
     from rich.text import Text
 
     if not findings:
-        console.print("[green]✓ No leakage or evaluation-rigor issues found.[/green]")
+        console.print("[green]OK No leakage or evaluation-rigor issues found.[/green]")
         return
 
     by_file: dict[str, list[Finding]] = defaultdict(list)
@@ -51,9 +51,9 @@ def _emit(console, findings: list[Finding], summary: Summary) -> None:
             console.print(head)
             console.print(f"    {f.message}", style=_COLOR.get(sev, ""))
             if f.location.snippet:
-                console.print(f"    │ {f.location.snippet}", style="dim")
+                console.print(f"    | {f.location.snippet}", style="dim")
             if f.fix:
-                console.print(f"    ↳ fix: {f.fix.summary}", style="green")
+                console.print(f"    -> fix: {f.fix.summary}", style="green")
 
     console.print()
     table = Table(title="Summary", show_header=True, header_style="bold")
@@ -75,7 +75,7 @@ def _emit(console, findings: list[Finding], summary: Summary) -> None:
         console.print(cat_table)
 
     console.print(
-        f"\nGate: [bold]{summary.gate}[/bold] — {summary.gated_count} finding(s) at or above gate."
+        f"\nGate: [bold]{summary.gate}[/bold] - {summary.gated_count} gateable finding(s)."
     )
 
 
@@ -84,8 +84,6 @@ def render(findings: list[Finding], summary: Summary, *, color: bool = True) -> 
 
     from rich.console import Console
 
-    # write to an in-memory buffer so render() only produces a string and never
-    # emits to the real terminal (print_report handles live output).
     console = Console(
         record=True, no_color=not color, force_terminal=color, width=100, file=io.StringIO()
     )

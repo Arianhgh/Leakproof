@@ -7,7 +7,9 @@ import warnings
 from dataclasses import dataclass
 from pathlib import Path
 
+from leakproof.core.aggregate import is_gateable
 from leakproof.core.config import Config
+from leakproof.core.models import Finding
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 LEAKY = FIXTURES / "leaky"
@@ -34,8 +36,8 @@ def _load_module(path: Path):
     return module
 
 
-def run_fixture(path: Path, config: Config | None = None) -> set[str]:
-    """Return the set of rule ids fired on a fixture, dispatching by kind."""
+def run_fixture_findings(path: Path, config: Config | None = None) -> list[Finding]:
+    """Return findings fired on a fixture, dispatching by kind."""
     cfg = config or Config()
     source = path.read_text(encoding="utf-8")
     kind = fixture_kind(source)
@@ -57,7 +59,12 @@ def run_fixture(path: Path, config: Config | None = None) -> set[str]:
             from leakproof.static.engine import StaticEngine
 
             findings = StaticEngine(cfg).run_file(path)
-    return {f.rule_id for f in findings}
+    return findings
+
+
+def run_fixture(path: Path, config: Config | None = None) -> set[str]:
+    """Return the set of rule ids fired on a fixture, dispatching by kind."""
+    return {f.rule_id for f in run_fixture_findings(path, config)}
 
 
 @dataclass
@@ -67,6 +74,7 @@ class RuleMetrics:
     fn: int = 0  # leaky fixtures where it did not
     fp: int = 0  # clean fixtures where it fired anyway
     tn: int = 0  # clean fixtures where it correctly stayed silent
+    gateable_fp: int = 0  # clean fixture false positives that would fail the gate
 
     @property
     def precision(self) -> float:
@@ -88,7 +96,7 @@ def compute_metrics(config: Config | None = None) -> dict[str, RuleMetrics]:
 
     for path in sorted(LEAKY.glob("*.py")):
         rid = rule_id_of(path)
-        fired = run_fixture(path, cfg)
+        fired = {f.rule_id for f in run_fixture_findings(path, cfg)}
         if rid in fired:
             m(rid).tp += 1
         else:
@@ -96,10 +104,16 @@ def compute_metrics(config: Config | None = None) -> dict[str, RuleMetrics]:
 
     for path in sorted(CLEAN.glob("*.py")):
         own = rule_id_of(path)
-        fired = run_fixture(path, cfg)
+        findings = run_fixture_findings(path, cfg)
+        fired = {f.rule_id for f in findings}
         # the rule's own clean fixture must stay silent; count FP per firing rule
         if own in fired:
             m(own).fp += 1
+            if any(
+                f.rule_id == own and is_gateable(f, cfg.fail_on, cfg.gate_confidence)
+                for f in findings
+            ):
+                m(own).gateable_fp += 1
         else:
             m(own).tn += 1
     return metrics

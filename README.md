@@ -2,16 +2,15 @@
 
 > A leakage and evaluation-rigor checker for ML and data-science projects.
 
-ML pipelines can be methodologically wrong while still running cleanly. Data leakage,
-broken cross-validation, repeated test-set use, and metric misuse often produce plausible
-but inflated results. `leakproof` checks for those problems in three ways:
+ML pipelines can run cleanly and still be wrong. `leakproof` checks for common
+leakage and evaluation mistakes in three ways:
 
 - **static** - AST and def-use/taint analysis; no execution or dataset required.
 - **data** - exact and near-duplicate overlap, group/temporal leakage, target-leakage probes.
 - **runtime** - sklearn/pandas instrumentation for fits that touch held-out rows.
 
-The optional LLM layer is explanation-only: it can clarify confirmed findings, but it
-does not create them. Reports are available for terminals, JSON, Markdown, and SARIF.
+Reports are available for terminals, JSON, Markdown, and SARIF. The optional LLM layer
+only explains existing findings.
 
 ## Install
 
@@ -30,6 +29,12 @@ leakproof check path/to/project
 
 # JSON / SARIF for CI:
 leakproof check . --format sarif --output leakproof.sarif --fail-on high
+
+# Fail CI only on confident findings:
+leakproof check . --fail-on high --gate-confidence 0.75 --profile ci
+
+# Hide low-confidence findings:
+leakproof check . --min-confidence 0.6
 
 # List or explain rules:
 leakproof rules
@@ -54,6 +59,12 @@ with leakproof.watch() as session:                # runtime
     train_and_evaluate()
 print(session.findings)
 ```
+
+## Confidence
+
+Reports show every finding by default. The exit code only fails when a finding meets
+both `--fail-on` and `--gate-confidence` (default `0.75`). Use `--min-confidence`
+to keep noisy findings out of a report. Profiles are `ci`, `notebook`, and `research`.
 
 ## What it detects
 

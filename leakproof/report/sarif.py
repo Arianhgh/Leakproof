@@ -94,6 +94,9 @@ def build(findings: list[Finding]) -> dict:
                     "category": f.category.value,
                     "layer": f.layer.value,
                     "confidence": f.confidence,
+                    "gateable": f.gateable,
+                    "profile": f.profile,
+                    "evidence": f.evidence,
                 },
             }
         )

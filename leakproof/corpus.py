@@ -1,17 +1,4 @@
-"""Corpus audit: clone a manifest of public ML repos and aggregate leakage rates.
-
-Manifest format (JSON)::
-
-    {
-      "repos": [
-        {"name": "example", "url": "https://github.com/owner/repo", "domain": "tabular"},
-        ...
-      ]
-    }
-
-Produces an aggregate report: findings per rule and per domain, plus a leakage
-rate (fraction of repos with at least one >= MEDIUM finding).
-"""
+"""Run leakproof across a small repo corpus."""
 
 from __future__ import annotations
 
@@ -20,21 +7,33 @@ import subprocess
 from collections import Counter, defaultdict
 from pathlib import Path
 
+from .core.aggregate import gate_failed
 from .core.config import Config
-from .core.models import Severity
 from .static.engine import StaticEngine
 
 
-def _clone(url: str, dest: Path) -> bool:
-    if dest.exists():
-        return True
+def _clone(url: str, dest: Path, ref: str | None = None) -> bool:
     try:
-        subprocess.run(
-            ["git", "clone", "--depth", "1", url, str(dest)],
-            check=True,
-            capture_output=True,
-            timeout=300,
-        )
+        if not dest.exists():
+            subprocess.run(
+                ["git", "clone", "--depth", "1", url, str(dest)],
+                check=True,
+                capture_output=True,
+                timeout=300,
+            )
+        if ref:
+            fetched = subprocess.run(
+                ["git", "-C", str(dest), "fetch", "--depth", "1", "origin", ref],
+                capture_output=True,
+                timeout=300,
+            )
+            checkout_target = "FETCH_HEAD" if fetched.returncode == 0 else ref
+            subprocess.run(
+                ["git", "-C", str(dest), "checkout", "--detach", checkout_target],
+                check=True,
+                capture_output=True,
+                timeout=300,
+            )
         return True
     except Exception:
         return False
@@ -54,7 +53,8 @@ def run_corpus(manifest_path: Path, workdir: Path, config: Config) -> dict:
     for repo in repos:
         name = repo["name"]
         dest = workdir / name
-        ok = _clone(repo["url"], dest)
+        ref = repo.get("ref") or repo.get("commit")
+        ok = _clone(repo["url"], dest, ref)
         if not ok:
             repo_results.append({"name": name, "status": "clone_failed"})
             continue
@@ -63,16 +63,25 @@ def run_corpus(manifest_path: Path, workdir: Path, config: Config) -> dict:
         per_rule.update(rule_counts)
         domain = repo.get("domain", "unknown")
         per_domain_rule[domain].update(rule_counts)
-        has_leak = any(f.severity.gate_rank >= Severity.MEDIUM.gate_rank for f in findings)
+        has_leak = gate_failed(findings, config.fail_on, config.gate_confidence)
         repos_with_leakage += int(has_leak)
+        expected = set(repo.get("expected_rule_ids", []))
+        expected_fp = set(repo.get("expected_false_positives", []))
+        observed = set(rule_counts)
         repo_results.append(
             {
                 "name": name,
                 "domain": domain,
+                "ref": ref,
                 "status": "ok",
                 "n_findings": len(findings),
                 "by_rule": dict(rule_counts),
                 "has_leakage": has_leak,
+                "expected_rule_ids": sorted(expected),
+                "expected_false_positives": sorted(expected_fp),
+                "missing_expected": sorted(expected - observed),
+                "unexpected_rule_ids": sorted(observed - expected - expected_fp),
+                "rationale": repo.get("rationale"),
             }
         )
 

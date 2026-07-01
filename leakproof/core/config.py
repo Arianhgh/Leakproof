@@ -1,8 +1,4 @@
-"""Configuration loading and merging.
-
-Resolution order (later overrides earlier):
-  built-in defaults -> pyproject.toml [tool.leakproof] -> leakproof.toml -> CLI flags
-"""
+"""Configuration loading."""
 
 from __future__ import annotations
 
@@ -18,16 +14,20 @@ else:  # pragma: no cover
 from .models import Layer, Severity
 
 DEFAULT_LAYERS = (Layer.STATIC, Layer.DATA, Layer.RUNTIME)
+PROFILES = {"ci", "notebook", "research"}
 
 
 @dataclass
 class DataConfig:
     neardup_text_threshold: float = 0.8
     neardup_distance: float = 0.05
+    imagehash_distance: int = 4
     imbalance_ratio: float = 0.9
     sample_cap: int = 200_000
-    target_leakage_score: float = 0.98  # univariate score above this is suspicious
-    mi_zscore: float = 3.0  # MI z-score above the cohort flagged
+    target_leakage_score: float = 0.98
+    mi_zscore: float = 3.0
+    hash_include: list[str] = field(default_factory=list)
+    hash_exclude: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -42,6 +42,9 @@ class Config:
     select: list[str] = field(default_factory=lambda: ["ALL"])
     ignore: list[str] = field(default_factory=list)
     fail_on: Severity = Severity.HIGH
+    min_confidence: float = 0.0
+    gate_confidence: float = 0.75
+    profile: str = "ci"
     exclude: list[str] = field(
         default_factory=lambda: ["tests/", "examples/", ".venv/", "build/", "dist/"]
     )
@@ -50,15 +53,8 @@ class Config:
     data: DataConfig = field(default_factory=DataConfig)
     llm: LLMConfig = field(default_factory=LLMConfig)
 
-    # ------------------------------------------------------------------
     @classmethod
     def load(cls, path: Path | None = None, *, start: Path | None = None) -> Config:
-        """Discover and merge config from disk.
-
-        If ``path`` is given it is loaded as a leakproof.toml-style file.
-        Otherwise we look for pyproject.toml then leakproof.toml walking up
-        from ``start`` (default: cwd).
-        """
         cfg = cls()
         start = start or Path.cwd()
 
@@ -86,6 +82,12 @@ class Config:
             self.ignore = list(table["ignore"])
         if "fail_on" in table:
             self.fail_on = Severity.from_str(str(table["fail_on"]))
+        if "min_confidence" in table:
+            self.min_confidence = _confidence(table["min_confidence"], "min_confidence")
+        if "gate_confidence" in table:
+            self.gate_confidence = _confidence(table["gate_confidence"], "gate_confidence")
+        if "profile" in table:
+            self.profile = _profile(str(table["profile"]))
         if "exclude" in table:
             self.exclude = list(table["exclude"])
         if "layers" in table:
@@ -106,7 +108,6 @@ class Config:
             if "model" in ll:
                 self.llm.model = str(ll["model"])
 
-    # CLI overrides ----------------------------------------------------
     def apply_cli(
         self,
         *,
@@ -115,6 +116,9 @@ class Config:
         layers: list[str] | None = None,
         fail_on: str | None = None,
         exclude: list[str] | None = None,
+        min_confidence: float | None = None,
+        gate_confidence: float | None = None,
+        profile: str | None = None,
     ) -> None:
         if select:
             self.select = list(select)
@@ -124,6 +128,12 @@ class Config:
             self.layers = [Layer(layer) for layer in layers]
         if fail_on:
             self.fail_on = Severity.from_str(fail_on)
+        if min_confidence is not None:
+            self.min_confidence = _confidence(min_confidence, "min_confidence")
+        if gate_confidence is not None:
+            self.gate_confidence = _confidence(gate_confidence, "gate_confidence")
+        if profile:
+            self.profile = _profile(profile)
         if exclude:
             self.exclude = list(self.exclude) + list(exclude)
 
@@ -134,11 +144,6 @@ def _read_toml(path: Path) -> dict:
 
 
 def _read_toml_table(path: Path, *, explicit: bool) -> dict:
-    """Read a leakproof.toml.
-
-    Accept either a top-level table or a [tool.leakproof] table (so the same
-    file shape works in either location).
-    """
     data = _read_toml(path)
     if "tool" in data and isinstance(data["tool"], dict) and "leakproof" in data["tool"]:
         return data["tool"]["leakproof"]
@@ -153,3 +158,20 @@ def _find_root(start: Path) -> Path:
         if (parent / ".git").exists():
             return parent
     return cur
+
+
+def _confidence(value, field: str) -> float:
+    try:
+        f = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{field} must be a float between 0 and 1") from exc
+    if not 0.0 <= f <= 1.0:
+        raise ValueError(f"{field} must be between 0 and 1")
+    return f
+
+
+def _profile(value: str) -> str:
+    profile = value.strip().lower()
+    if profile not in PROFILES:
+        raise ValueError(f"profile must be one of: {', '.join(sorted(PROFILES))}")
+    return profile

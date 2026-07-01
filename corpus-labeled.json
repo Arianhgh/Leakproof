@@ -1,0 +1,14 @@
+{
+  "description": "Pinned repos for corpus checks.",
+  "repos": [
+    {
+      "name": "scikit-learn-videos",
+      "url": "https://github.com/justmarkham/scikit-learn-videos",
+      "ref": "8545c74961398def7724501648fd504dbf061b41",
+      "domain": "tabular-notebooks",
+      "expected_rule_ids": ["C005", "M002", "M003", "R001"],
+      "expected_false_positives": ["C001", "S002"],
+      "rationale": "Teaching notebooks have exploratory cells; only connected evaluation paths should gate."
+    }
+  ]
+}

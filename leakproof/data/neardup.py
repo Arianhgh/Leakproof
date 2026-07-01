@@ -1,10 +1,4 @@
-"""Near-duplicate detection across splits.
-
-Strategy by data type:
-  - text columns       -> MinHash + LSH (datasketch) on shingles
-  - numeric features   -> NearestNeighbors in standardized space
-  - image path columns -> perceptual hash (imagehash) [opt-in via feature_types]
-"""
+"""Near-duplicate checks for text, numeric, and image-path features."""
 
 from __future__ import annotations
 
@@ -19,11 +13,6 @@ def _shingles(text: str, k: int = 5) -> set[str]:
 
 
 def text_near_duplicates(train_texts, test_texts, threshold: float) -> list[tuple[int, int, float]]:
-    """Return (train_idx, test_idx, jaccard) pairs above ``threshold``.
-
-    Uses datasketch MinHashLSH when available; falls back to exact Jaccard for
-    small inputs.
-    """
     try:
         from datasketch import MinHash, MinHashLSH
     except Exception:
@@ -72,7 +61,6 @@ def _exact_jaccard(train_texts, test_texts, threshold: float) -> list[tuple[int,
 
 
 def numeric_near_duplicates(train_X, test_X, distance: float) -> list[tuple[int, int, float]]:
-    """Return (train_idx, test_idx, dist) pairs within ``distance`` in standardized space."""
     try:
         import numpy as np
         from sklearn.neighbors import NearestNeighbors
@@ -90,10 +78,39 @@ def numeric_near_duplicates(train_X, test_X, distance: float) -> list[tuple[int,
     nn.fit(tr)
     dists, idxs = nn.kneighbors(te)
     pairs: list[tuple[int, int, float]] = []
-    # normalize distance by sqrt(n_features) so the threshold is dimension-stable
     denom = (tr.shape[1] ** 0.5) or 1.0
     for j, (d, i) in enumerate(zip(dists[:, 0], idxs[:, 0])):
         norm = float(d) / denom
         if norm <= distance:
             pairs.append((int(i), j, norm))
+    return pairs
+
+
+def image_near_duplicates(train_paths, test_paths, max_distance: int) -> list[tuple[int, int, float]]:
+    try:
+        import imagehash
+        from PIL import Image
+    except Exception:
+        return []
+
+    def hash_one(path: str):
+        try:
+            with Image.open(path) as img:
+                return imagehash.phash(img)
+        except Exception:
+            return None
+
+    train_hashes = [(i, h) for i, p in enumerate(train_paths) if (h := hash_one(p)) is not None]
+    test_hashes = [(j, h) for j, p in enumerate(test_paths) if (h := hash_one(p)) is not None]
+    pairs: list[tuple[int, int, float]] = []
+    for j, test_h in test_hashes:
+        best_i = None
+        best_d = None
+        for i, train_h in train_hashes:
+            d = int(test_h - train_h)
+            if best_d is None or d < best_d:
+                best_i = i
+                best_d = d
+        if best_i is not None and best_d is not None and best_d <= max_distance:
+            pairs.append((best_i, j, float(best_d)))
     return pairs

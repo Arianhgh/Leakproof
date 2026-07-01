@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from leakproof.core.aggregate import dedupe, gate_failed, summarize
+from leakproof.core.aggregate import annotate_gateability, dedupe, gate_failed, summarize
 from leakproof.core.models import Category, Finding, Layer, Location, Severity
 
 
@@ -30,7 +30,23 @@ def test_summarize_counts():
     assert s.by_severity["high"] == 1
     assert s.gated_count == 1
 
+    s = summarize([_f("C001", Severity.HIGH, conf=0.7)], Severity.HIGH, 0.75)
+    assert s.gated_count == 0
+
 
 def test_gate_failed():
     assert gate_failed([_f("P001", Severity.HIGH)], Severity.HIGH)
     assert not gate_failed([_f("R001", Severity.LOW)], Severity.HIGH)
+    assert not gate_failed([_f("C001", Severity.HIGH, conf=0.7)], Severity.HIGH, 0.75)
+
+
+def test_annotate_gateability_adds_metadata():
+    findings = annotate_gateability(
+        [_f("C001", Severity.HIGH, conf=0.7)],
+        gate=Severity.HIGH,
+        gate_confidence=0.75,
+        profile="ci",
+    )
+    assert findings[0].gateable is False
+    assert findings[0].profile == "ci"
+    assert "confidence-below-gate" in findings[0].evidence["reason_codes"]

@@ -6,7 +6,14 @@ from pathlib import Path
 
 import typer
 
-from .core.aggregate import dedupe, gate_failed, sort_findings, summarize
+from .core.aggregate import (
+    annotate_gateability,
+    dedupe,
+    filter_min_confidence,
+    gate_failed,
+    sort_findings,
+    summarize,
+)
 from .core.config import Config
 
 app = typer.Typer(
@@ -43,6 +50,17 @@ def _emit_reports(findings, summary, formats: list[str], output: Path | None, co
             typer.echo(text)
 
 
+def _prepare_findings(findings, cfg: Config):
+    findings = sort_findings(dedupe(findings))
+    findings = annotate_gateability(
+        findings,
+        gate=cfg.fail_on,
+        gate_confidence=cfg.gate_confidence,
+        profile=cfg.profile,
+    )
+    return filter_min_confidence(findings, cfg.min_confidence)
+
+
 @app.command()
 def check(
     paths: list[Path] = typer.Argument(None, help="Files or directories to scan."),
@@ -50,6 +68,21 @@ def check(
     ignore: list[str] = typer.Option(None, "--ignore", help="Rule globs to skip."),
     layers: str | None = typer.Option(None, "--layers", help="Comma list: static,data,runtime."),
     fail_on: str | None = typer.Option(None, "--fail-on", help="Severity gate (default: high)."),
+    min_confidence: float | None = typer.Option(
+        None,
+        "--min-confidence",
+        help="Hide findings below this confidence (0..1).",
+    ),
+    gate_confidence: float | None = typer.Option(
+        None,
+        "--gate-confidence",
+        help="Minimum confidence required to affect the exit code (0..1).",
+    ),
+    profile: str | None = typer.Option(
+        None,
+        "--profile",
+        help="Analysis profile: ci|notebook|research.",
+    ),
     fmt: list[str] = typer.Option(None, "--format", help="terminal|json|sarif|markdown (repeatable)."),
     output: Path | None = typer.Option(None, "--output", help="Write report to file."),
     explain: bool = typer.Option(False, "--explain", help="Attach LLM explanations (requires llm.enabled)."),
@@ -67,6 +100,9 @@ def check(
         ignore=list(ignore) if ignore else None,
         layers=layers.split(",") if layers else None,
         fail_on=fail_on,
+        min_confidence=min_confidence,
+        gate_confidence=gate_confidence,
+        profile=profile,
     )
     scan_paths = [Path(p) for p in (paths or [Path(".")])]
     root = Path.cwd()
@@ -85,7 +121,7 @@ def check(
         for f in discover_files(scan_paths, cfg.exclude, root):
             findings.extend(triage_file(f, cfg))
 
-    findings = sort_findings(dedupe(findings))
+    findings = _prepare_findings(findings, cfg)
 
     if fix:
         from .autofix import apply_fixes
@@ -101,10 +137,12 @@ def check(
         explained = {id(f): e for f, e in zip(gated, explain_all(gated, cfg))}
         findings = [explained.get(id(f), f) for f in findings]
 
-    summary = summarize(findings, cfg.fail_on)
+    summary = summarize(findings, cfg.fail_on, cfg.gate_confidence)
     _emit_reports(findings, summary, list(fmt or []), output, color=not no_color)
 
-    raise typer.Exit(EXIT_FINDINGS if gate_failed(findings, cfg.fail_on) else EXIT_CLEAN)
+    raise typer.Exit(
+        EXIT_FINDINGS if gate_failed(findings, cfg.fail_on, cfg.gate_confidence) else EXIT_CLEAN
+    )
 
 
 @app.command()
@@ -114,6 +152,9 @@ def run(
     fmt: list[str] = typer.Option(None, "--format"),
     output: Path | None = typer.Option(None, "--output"),
     fail_on: str | None = typer.Option(None, "--fail-on"),
+    min_confidence: float | None = typer.Option(None, "--min-confidence"),
+    gate_confidence: float | None = typer.Option(None, "--gate-confidence"),
+    profile: str | None = typer.Option(None, "--profile"),
     config: Path | None = typer.Option(None, "--config"),
     no_color: bool = typer.Option(False, "--no-color"),
 ) -> None:
@@ -121,16 +162,23 @@ def run(
     from .runtime.engine import run_script
 
     cfg = _load_config(config)
-    cfg.apply_cli(fail_on=fail_on)
+    cfg.apply_cli(
+        fail_on=fail_on,
+        min_confidence=min_confidence,
+        gate_confidence=gate_confidence,
+        profile=profile,
+    )
     try:
         findings, _ = run_script(script, list(args or []), cfg)
     except Exception as exc:  # pragma: no cover
         typer.secho(f"leakproof error: {exc}", fg="red", err=True)
         raise typer.Exit(EXIT_ERROR) from exc
-    findings = sort_findings(dedupe(findings))
-    summary = summarize(findings, cfg.fail_on)
+    findings = _prepare_findings(findings, cfg)
+    summary = summarize(findings, cfg.fail_on, cfg.gate_confidence)
     _emit_reports(findings, summary, list(fmt or []), output, color=not no_color)
-    raise typer.Exit(EXIT_FINDINGS if gate_failed(findings, cfg.fail_on) else EXIT_CLEAN)
+    raise typer.Exit(
+        EXIT_FINDINGS if gate_failed(findings, cfg.fail_on, cfg.gate_confidence) else EXIT_CLEAN
+    )
 
 
 @app.command(name="audit-data")
@@ -144,12 +192,20 @@ def audit_data_cmd(
     fmt: list[str] = typer.Option(None, "--format"),
     output: Path | None = typer.Option(None, "--output"),
     fail_on: str | None = typer.Option(None, "--fail-on"),
+    min_confidence: float | None = typer.Option(None, "--min-confidence"),
+    gate_confidence: float | None = typer.Option(None, "--gate-confidence"),
+    profile: str | None = typer.Option(None, "--profile"),
     config: Path | None = typer.Option(None, "--config"),
     no_color: bool = typer.Option(False, "--no-color"),
 ) -> None:
     """Run the data layer on explicit train/test (and optional val) files."""
     cfg = _load_config(config)
-    cfg.apply_cli(fail_on=fail_on)
+    cfg.apply_cli(
+        fail_on=fail_on,
+        min_confidence=min_confidence,
+        gate_confidence=gate_confidence,
+        profile=profile,
+    )
     try:
         import pandas as pd
 
@@ -171,10 +227,12 @@ def audit_data_cmd(
     except Exception as exc:
         typer.secho(f"leakproof error: {exc}", fg="red", err=True)
         raise typer.Exit(EXIT_ERROR) from exc
-    findings = sort_findings(dedupe(findings))
-    summary = summarize(findings, cfg.fail_on)
+    findings = _prepare_findings(findings, cfg)
+    summary = summarize(findings, cfg.fail_on, cfg.gate_confidence)
     _emit_reports(findings, summary, list(fmt or []), output, color=not no_color)
-    raise typer.Exit(EXIT_FINDINGS if gate_failed(findings, cfg.fail_on) else EXIT_CLEAN)
+    raise typer.Exit(
+        EXIT_FINDINGS if gate_failed(findings, cfg.fail_on, cfg.gate_confidence) else EXIT_CLEAN
+    )
 
 
 @app.command()

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import re
 from collections.abc import Iterable
 
 from ...core.context import StaticContext
@@ -63,6 +64,19 @@ def first(it: Iterable[Finding]) -> Finding | None:
 _IMPUTER_CLASSES = {"SimpleImputer", "KNNImputer", "IterativeImputer"}
 
 
+def text_has_hint(value: str, hints: tuple[str, ...]) -> bool:
+    """Token-aware hint matching; avoids substring hits like 'validated' -> 'date'."""
+    low = value.lower()
+    tokens = set(re.findall(r"[a-z0-9]+", low))
+    for hint in hints:
+        h = hint.lower().strip("_")
+        if hint.startswith("_") and hint in low:
+            return True
+        if h in tokens:
+            return True
+    return False
+
+
 def classify_full_fit(fit, ctx: StaticContext) -> str | None:
     """Return the rule id responsible for a leaky fit call, or None if clean.
 
@@ -70,6 +84,8 @@ def classify_full_fit(fit, ctx: StaticContext) -> str | None:
     """
     df = ctx.dataflow
     if fit.in_pipeline:
+        return None
+    if df.disconnected_fit_transform_demo(fit):
         return None
     if df.leak_taint(fit) is None:
         return None

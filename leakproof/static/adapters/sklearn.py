@@ -95,9 +95,6 @@ _METRICS = {
 }
 
 
-# Only callables that actually accept random_state / seed. Deterministic
-# estimators (LinearRegression, KNeighbors, GaussianNB, ...) are intentionally
-# excluded so R001 does not false-positive on them.
 _SEEDED = {
     "RandomForestClassifier",
     "RandomForestRegressor",
@@ -155,7 +152,12 @@ def adapter() -> FrameworkAdapter:
         transformers=_TRANSFORMERS,
         estimators=_ESTIMATORS,
         feature_selectors=_FEATURE_SELECTORS,
-        pipeline_constructors={"Pipeline", "make_pipeline"},
+        pipeline_constructors={
+            "Pipeline",
+            "make_pipeline",
+            "ColumnTransformer",
+            "make_column_transformer",
+        },
         search_constructors={
             "GridSearchCV",
             "RandomizedSearchCV",
