@@ -51,8 +51,6 @@ cst = [
     "libcst>=1.0",
 ]
 dev = [
-    "pytest>=7.0",
-    "pytest-cov>=4.0",
     "ruff>=0.4",
     "mypy>=1.8",
     "pre-commit>=3.0",
@@ -81,22 +79,19 @@ Issues = "https://github.com/leakproof/leakproof/issues"
 packages = ["leakproof"]
 
 [tool.hatch.build.targets.sdist]
-include = ["leakproof", "tests", "README.md", "SKILL.md", "LICENSE"]
+include = ["leakproof", "README.md", "SKILL.md", "LICENSE"]
 
 [tool.leakproof]
 select = ["ALL"]
 ignore = []
 fail_on = "high"
-exclude = ["tests/", "examples/", ".venv/", "build/", "dist/"]
+exclude = ["examples/", ".venv/", "build/", "dist/"]
 layers = ["static", "data", "runtime"]
 
 [tool.ruff]
 line-length = 100
 target-version = "py310"
-extend-exclude = [
-    ".leakproof-corpus",
-    "tests/fixtures",
-]
+extend-exclude = [".leakproof-corpus"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "W"]
@@ -110,9 +105,3 @@ python_version = "3.10"
 warn_unused_ignores = false
 ignore_missing_imports = true
 no_implicit_optional = true
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-addopts = "--ignore=tests/fixtures"
-norecursedirs = ["tests/fixtures", "*.egg", ".*", "build", "dist"]
-filterwarnings = ["ignore::DeprecationWarning"]

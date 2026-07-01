@@ -74,5 +74,3 @@ myorg = "myorg_leakproof:adapter"
 ```
 
 Install the plugin alongside leakproof and its rules/adapters load automatically.
-
-A complete working example lives in `tests/integration/example_plugin/`.

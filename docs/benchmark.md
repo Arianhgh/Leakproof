@@ -3,28 +3,11 @@
 The benchmark suite is small on purpose. It answers two questions: did the rule catch
 the leak, and did it stay quiet on the clean version?
 
-## Fixture suite
-
-Each rule has a leaky fixture and a clean fixture under
-`tests/fixtures/{leaky,clean}/<RULE_ID>__<slug>.py`.
-
-Regenerate them with:
-
-```bash
-python tests/fixtures/_gen.py
-```
-
 ## Per-rule precision / recall
 
-Computed in CI on the fixture suite:
-
-```bash
-python -m tests.corpus.metrics
-```
-
-Because these are paired fixtures, precision and recall should stay at 1.00. CI fails
-when a rule misses its leaky fixture or fires on its clean fixture. It also tracks
-gateable false positives: clean findings that would fail the severity/confidence gate.
+Computed on the labeled validation corpus. The suite keeps paired leaky and clean cases
+for each rule, then tracks recall, clean false positives, and gateable false positives:
+clean findings that would fail the severity/confidence gate.
 
 | metric | value |
 |--------|-------|

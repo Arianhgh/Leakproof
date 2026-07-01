@@ -86,16 +86,8 @@ and determinism. Run `leakproof rules` for the full list, or see [docs/rules.md]
 
 ## Benchmark transparency
 
-Every rule has at least one *leaky* fixture that should be flagged and one *clean* fixture
-that should stay quiet. CI runs the fixture suite to catch both missed detections and
-false positives:
-
-```bash
-pytest tests/ -q
-python -m tests.corpus.metrics   # prints the per-rule precision/recall table
-```
-
-See [docs/benchmark.md](docs/benchmark.md) for the published table and the corpus-audit
+Rules are checked against a labeled validation corpus before release. See
+[docs/benchmark.md](docs/benchmark.md) for the published table and the corpus-audit
 methodology.
 
 ## CI integration
@@ -107,7 +99,7 @@ methodology.
 ## Extending
 
 Third parties add rules and framework adapters via entry points — no fork required. See
-[docs/plugins.md](docs/plugins.md) and `tests/integration/example_plugin/`.
+[docs/plugins.md](docs/plugins.md).
 
 ## License
 
