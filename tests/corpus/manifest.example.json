@@ -1,0 +1,8 @@
+{
+  "description": "Example corpus-audit manifest. Replace with real public ML repos / Kaggle notebook mirrors.",
+  "repos": [
+    {"name": "example-tabular", "url": "https://github.com/owner/tabular-ml-demo", "domain": "tabular"},
+    {"name": "example-nlp", "url": "https://github.com/owner/nlp-ml-demo", "domain": "nlp"},
+    {"name": "example-timeseries", "url": "https://github.com/owner/timeseries-demo", "domain": "timeseries"}
+  ]
+}

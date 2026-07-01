@@ -1,0 +1,8 @@
+- id: leakproof
+  name: leakproof (ML leakage / eval-rigor check)
+  description: Static leakage and evaluation-rigor analysis of staged Python files.
+  entry: leakproof check
+  language: python
+  types: [python]
+  args: ["--layers", "static", "--fail-on", "high"]
+  require_serial: true

@@ -1,0 +1,10 @@
+{
+  "description": "Real-world public ML repositories for a static-only leakage audit.",
+  "repos": [
+    {"name": "scikit-learn-videos",   "url": "https://github.com/justmarkham/scikit-learn-videos",        "domain": "tabular"},
+    {"name": "pycon-2016-tutorial",   "url": "https://github.com/justmarkham/pycon-2016-tutorial",        "domain": "nlp"},
+    {"name": "intro-to-ml-sklearn",   "url": "https://github.com/amueller/introduction_to_ml_with_python", "domain": "tabular"},
+    {"name": "ml-with-python",        "url": "https://github.com/susanli2016/Machine-Learning-with-Python", "domain": "mixed"},
+    {"name": "ds-from-scratch",       "url": "https://github.com/joelgrus/data-science-from-scratch",       "domain": "tabular"}
+  ]
+}

@@ -1,0 +1,118 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "leakproof"
+version = "0.1.0"
+description = "A hybrid (static + data + runtime) leakage and evaluation-rigor checker for ML/data-science code."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "leakproof contributors" }]
+keywords = ["machine-learning", "data-leakage", "linter", "static-analysis", "ml-evaluation", "ci"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Quality Assurance",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "typer>=0.9",
+    "rich>=13.0",
+    "nbformat>=5.0",
+    "tomli>=2.0; python_version < '3.11'",
+]
+
+[project.optional-dependencies]
+data = [
+    "pandas>=1.5",
+    "numpy>=1.23",
+    "scikit-learn>=1.1",
+    "scipy>=1.9",
+    "datasketch>=1.5",
+    "imagehash>=4.3",
+]
+runtime = [
+    "wrapt>=1.14",
+    "scikit-learn>=1.1",
+]
+llm = [
+    "anthropic>=0.25",
+    "openai>=1.0",
+]
+cst = [
+    "libcst>=1.0",
+]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "ruff>=0.4",
+    "mypy>=1.8",
+    "pre-commit>=3.0",
+    "pandas>=1.5",
+    "numpy>=1.23",
+    "scikit-learn>=1.1",
+    "scipy>=1.9",
+    "wrapt>=1.14",
+]
+
+[project.scripts]
+leakproof = "leakproof.cli:app"
+
+[project.urls]
+Homepage = "https://github.com/leakproof/leakproof"
+Documentation = "https://github.com/leakproof/leakproof#readme"
+Issues = "https://github.com/leakproof/leakproof/issues"
+
+[project.entry-points."leakproof.rules"]
+# third-party plugins register here; built-ins are registered via decorator import
+
+[project.entry-points."leakproof.adapters"]
+# third-party framework adapters register here
+
+[tool.hatch.build.targets.wheel]
+packages = ["leakproof"]
+
+[tool.hatch.build.targets.sdist]
+include = ["leakproof", "tests", "README.md", "SKILL.md", "LICENSE"]
+
+[tool.leakproof]
+select = ["ALL"]
+ignore = []
+fail_on = "high"
+exclude = ["tests/", "examples/", ".venv/", "build/", "dist/"]
+layers = ["static", "data", "runtime"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+extend-exclude = [
+    ".leakproof-corpus",
+    "tests/fixtures",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "W"]
+# B008: typer uses Option()/Argument() as defaults by design.
+ignore = ["E501", "B905", "B008"]
+
+[tool.mypy]
+python_version = "3.10"
+# version-guarded imports (tomli/importlib_metadata) legitimately need ignores
+# that look unused on newer interpreters.
+warn_unused_ignores = false
+ignore_missing_imports = true
+no_implicit_optional = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--ignore=tests/fixtures"
+norecursedirs = ["tests/fixtures", "*.egg", ".*", "build", "dist"]
+filterwarnings = ["ignore::DeprecationWarning"]

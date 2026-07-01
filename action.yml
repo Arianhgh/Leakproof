@@ -1,0 +1,40 @@
+name: "leakproof"
+description: "Run leakproof and emit SARIF for GitHub code scanning."
+branding:
+  icon: "shield"
+  color: "purple"
+inputs:
+  paths:
+    description: "Paths to scan."
+    required: false
+    default: "."
+  select:
+    description: "Rule globs to run (space-separated)."
+    required: false
+    default: ""
+  fail-on:
+    description: "Severity gate (critical|high|medium|low)."
+    required: false
+    default: "high"
+  layers:
+    description: "Comma list of layers: static,data,runtime."
+    required: false
+    default: "static"
+  output:
+    description: "SARIF output path."
+    required: false
+    default: "leakproof.sarif"
+runs:
+  using: "composite"
+  steps:
+    - shell: bash
+      run: pip install "leakproof @ git+https://github.com/leakproof/leakproof@v0.1.0"
+    - shell: bash
+      run: |
+        SELECT=""
+        if [ -n "${{ inputs.select }}" ]; then SELECT="--select ${{ inputs.select }}"; fi
+        leakproof check ${{ inputs.paths }} \
+          --layers "${{ inputs.layers }}" \
+          --fail-on "${{ inputs.fail-on }}" \
+          --format sarif --output "${{ inputs.output }}" \
+          $SELECT

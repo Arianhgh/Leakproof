@@ -1,0 +1,26 @@
+# Example leakproof configuration.
+# Place this at your repo root, or use a [tool.leakproof] table in pyproject.toml.
+# Resolution order: built-in defaults -> pyproject.toml -> leakproof.toml -> CLI flags.
+
+select = ["ALL"]                 # or explicit globs: ["P001", "C00*", "D*"]
+ignore = []
+fail_on = "high"                 # fail CI if any finding >= this severity
+exclude = ["tests/", "examples/", ".venv/"]
+layers = ["static", "data", "runtime"]
+
+[severity]
+# per-rule severity overrides
+# S002 = "low"
+
+[data]
+neardup_text_threshold = 0.8
+neardup_distance = 0.05
+imbalance_ratio = 0.9
+sample_cap = 200000
+target_leakage_score = 0.98
+mi_zscore = 3.0
+
+[llm]
+enabled = false
+provider = "anthropic"           # anthropic | openai | ollama
+# model = "claude-opus-4-8"
