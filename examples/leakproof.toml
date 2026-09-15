@@ -1,0 +1,5 @@
+select = ["ALL"]
+ignore = []
+exclude = []
+layers = ["static", "data", "runtime"]
+fail_on = "high"

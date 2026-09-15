@@ -35,6 +35,9 @@ ml-leakproof version
 the script's own exit status is preserved in the result. `audit-data` validates
 explicit pandas train/validation/test frames and never executes model code.
 
+Runnable static, runtime, and data-layer examples are in
+[`examples/README.md`](examples/README.md).
+
 ## Result contract
 
 Result-oriented APIs return `AnalysisResult`, not an unqualified list:

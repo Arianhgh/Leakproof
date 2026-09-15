@@ -102,6 +102,7 @@ include = [
     "ml_leakproof",
     "tests",
     "docs",
+    "examples",
     "README.md",
     "SKILL.md",
     "LICENSE",
