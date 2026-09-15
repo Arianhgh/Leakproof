@@ -32,7 +32,9 @@ ml-leakproof version
 ```
 
 `check` is static-only. `run` executes one script inside runtime instrumentation;
-the script's own exit status is preserved in the result. `audit-data` validates
+the script's own exit status is preserved in the result. Script `stdout` is
+forwarded to `stderr` so machine-readable runtime reports remain valid JSON or
+SARIF. `audit-data` validates
 explicit pandas train/validation/test frames and never executes model code.
 
 Runnable static, runtime, and data-layer examples are in

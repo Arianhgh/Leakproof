@@ -36,7 +36,8 @@ python -m ml_leakproof run examples/clean_workflow.py \
 
 Expect exit code `0`, `completion: "complete"`, and no findings. The leaky
 workflow can be executed the same way and should return exit code `1` with
-runtime findings.
+runtime findings. Script print output is sent to `stderr`, leaving the JSON
+report on `stdout` for piping into tools such as `jq`.
 
 ## Data analysis
 

@@ -93,6 +93,7 @@ class CallRecord:
     arg_vars: list[str]
     arg_taints: list[Taint]
     keyword_vars: dict[str, list[str]] = field(default_factory=dict)
+    keyword_taints: dict[str, Taint] = field(default_factory=dict)
     scope_name: str = "<module>"
     scope_id: int = 0
     receiver_var: str | None = None
@@ -116,6 +117,8 @@ class ScopeFlow:
     pipeline_bindings: set[str] = field(default_factory=set)
     assignment_lines: dict[str, int] = field(default_factory=dict)
     binding_versions: dict[str, int] = field(default_factory=dict)
+    assignment_records: list[tuple[str, int, ast.expr]] = field(default_factory=list)
+    assignment_dependencies: dict[tuple[str, int], dict[str, int]] = field(default_factory=dict)
     next_binding_version: int = 0
 
 
@@ -280,6 +283,7 @@ class DataFlow:
     def _finish_assignment(
         self, targets: list[str], value: ast.expr, scope: ScopeFlow, line: int
     ) -> None:
+        value_binding_versions = self._binding_versions(_expr_names(value), scope)
         constructor_class: str | None = None
         if isinstance(value, ast.Call):
             name = self.resolve_name(value.func)
@@ -300,6 +304,19 @@ class DataFlow:
         taint = self._infer_taint(value, scope)
         for target in targets:
             self._assign_name(target, taint, scope, line)
+            version = scope.binding_versions.get(target, 0)
+            scope.assignment_records.append((target, version, value))
+            scope.assignment_dependencies[(target, version)] = value_binding_versions
+            # A subscript assignment mutates the parent data object without
+            # rebinding its name.  Record the value against the parent's
+            # current binding as well so split-local provenance can see
+            # operations such as ``df["date"] = pd.to_datetime(...)``.
+            if "[" in target:
+                parent = target.split("[", 1)[0]
+                parent_version = scope.binding_versions.get(parent, 0)
+                if parent and parent_version:
+                    scope.assignment_records.append((parent, parent_version, value))
+                    scope.assignment_dependencies[(parent, parent_version)] = value_binding_versions
         for fit in scope.fit_calls:
             if fit.node is value:
                 fit.output_binding_versions = self._binding_versions(targets, scope)
@@ -443,6 +460,11 @@ class DataFlow:
         keyword_vars = {
             kw.arg: _expr_names(kw.value) for kw in node.keywords if kw.arg is not None
         }
+        keyword_taints = {
+            kw.arg: self._infer_taint(kw.value, scope)
+            for kw in node.keywords
+            if kw.arg is not None
+        }
         all_vars = list(arg_vars)
         for names in keyword_vars.values():
             all_vars.extend(names)
@@ -459,6 +481,7 @@ class DataFlow:
                 arg_vars=all_vars,
                 arg_taints=arg_taints,
                 keyword_vars=keyword_vars,
+                keyword_taints=keyword_taints,
                 scope_name=scope.name,
                 scope_id=scope.scope_id,
                 receiver_var=receiver_var,
@@ -802,55 +825,129 @@ class DataFlow:
             and search_fit.class_name is not None
             and self.adapters.is_search_constructor(search_fit.class_name)
         )
-        if fit.output_binding_versions and any(
-            fit.scope_id == scope_id
-            and any(
-                name in bindings
-                and bindings.get(name) == version
-                for name, version in fit.output_binding_versions.items()
+        def consumed(candidate: dict[str, int]) -> bool:
+            return any(
+                fit.scope_id == consumer_scope
+                and any(
+                    name in consumer_bindings and consumer_bindings.get(name) == version
+                    for name, version in candidate.items()
+                )
+                for consumer_scope, consumer_bindings in consumers
             )
-            for scope_id, bindings in consumers
-        ):
+
+        # A fit_transform result can be passed directly to a CV/search call.
+        if fit.output_binding_versions and consumed(fit.output_binding_versions):
             return True
 
         # Follow one supported transform assignment, e.g. ``scaled =
-        # scaler.transform(X)``.  The bounded IR intentionally stops here
-        # rather than inventing transitive facts through arbitrary functions.
-        if fit.receiver_var:
-            for call in self.calls:
-                if call.func_name not in {"transform", "fit_transform", "fit_resample"}:
+        # scaler.transform(X)``.  The fitted receiver can be a named object
+        # (``scaler.fit``) or the result of a constructor method chain
+        # (``vect = CountVectorizer().fit``).
+        roots: set[tuple[str, int]] = set()
+        if fit.receiver_var and fit.receiver_binding_version is not None:
+            roots.add((fit.receiver_var, fit.receiver_binding_version))
+        roots.update(
+            (name, version)
+            for name, version in fit.output_binding_versions.items()
+        )
+        for call in self.calls:
+            if call.func_name not in {"transform", "fit_transform", "fit_resample"}:
+                continue
+            if call.scope_id != fit.scope_id or call.receiver_var is None:
+                continue
+            receiver = (call.receiver_var, call.receiver_binding_version or 0)
+            if receiver not in roots:
+                continue
+            targets = set(self._call_targets.get(id(call.node), []))
+            target_versions = call.output_binding_versions
+            if targets and consumed(
+                {target: target_versions.get(target, 0) for target in targets}
+            ):
+                return True
+
+            # Also support an inline transform in a CV argument.
+            for cv_call in self.calls:
+                if cv_call.func_name not in cv_names:
                     continue
-                if not isinstance(call.node.func, ast.Attribute):
-                    continue
-                if (
-                    call.scope_id != fit.scope_id
-                    or _expr_ref(call.node.func.value) != fit.receiver_var
-                    or call.receiver_binding_version != fit.receiver_binding_version
-                ):
-                    continue
-                targets = set(self._call_targets.get(id(call.node), []))
-                target_versions = call.output_binding_versions
-                if targets and any(
-                    fit.scope_id == scope_id
-                    and any(
-                        target in bindings
-                        and bindings.get(target) == target_versions.get(target)
-                        for target in targets
-                    )
-                    for scope_id, bindings in consumers
+                if any(
+                    nested is call.node
+                    for argument in [*cv_call.node.args, *(kw.value for kw in cv_call.node.keywords)]
+                    for nested in ast.walk(argument)
                 ):
                     return True
 
-                # Also support an inline transform in a CV argument.
-                for cv_call in self.calls:
-                    if cv_call.func_name not in cv_names:
-                        continue
-                    if any(
-                        nested is call.node
-                        for argument in [*cv_call.node.args, *(kw.value for kw in cv_call.node.keywords)]
-                        for nested in ast.walk(argument)
-                    ):
-                        return True
+        # ``cross_val_score(model, scaler.fit_transform(X), y)`` has no
+        # assignment to follow, but the fit call is still evaluated before
+        # the CV utility.  Preserve that direct operation ancestry.
+        for cv_call in self.calls:
+            if cv_call.func_name not in cv_names:
+                continue
+            for argument in [*cv_call.node.args, *(kw.value for kw in cv_call.node.keywords)]:
+                if any(nested is fit.node for nested in ast.walk(argument)):
+                    return True
+        for search_fit in self.fit_calls:
+            if (
+                search_fit.method != "fit"
+                or not search_fit.class_name
+                or not self.adapters.is_search_constructor(search_fit.class_name)
+            ):
+                continue
+            for argument in [
+                *search_fit.node.args,
+                *(kw.value for kw in search_fit.node.keywords),
+            ]:
+                if any(nested is fit.node for nested in ast.walk(argument)):
+                    return True
+        return False
+
+    def assignment_records_for_scope(
+        self, scope_id: int
+    ) -> list[tuple[str, int, ast.expr]]:
+        """Return ordered assignment expressions for one lexical scope."""
+
+        for scope in self.scopes:
+            if scope.scope_id == scope_id:
+                return list(scope.assignment_records)
+        return []
+
+    def assignment_dependencies_for_scope(
+        self, scope_id: int
+    ) -> dict[tuple[str, int], dict[str, int]]:
+        """Return RHS binding versions captured at assignment time."""
+
+        for scope in self.scopes:
+            if scope.scope_id == scope_id:
+                return {
+                    key: dict(value) for key, value in scope.assignment_dependencies.items()
+                }
+        return {}
+
+    def search_has_holdout_evaluation(self, fit: FitCall) -> bool:
+        """Return whether a fitted search is evaluated on a held-out split.
+
+        An independent test set is a valid alternative to nested CV for
+        estimating the final selected model.  This check is intentionally
+        limited to a later score/prediction call on the same search binding.
+        """
+
+        if not fit.receiver_var or not fit.class_name:
+            return False
+        if not self.adapters.is_search_constructor(fit.class_name):
+            return False
+        eval_methods = {"score", "predict", "predict_proba", "decision_function"}
+        for call in self.calls:
+            if (
+                call.scope_id != fit.scope_id
+                or call.line < fit.line
+                or call.receiver_var != fit.receiver_var
+                or call.receiver_binding_version != fit.receiver_binding_version
+                or call.func_name not in eval_methods
+            ):
+                continue
+            if any(taint.is_eval_side for taint in call.arg_taints) or any(
+                self._name_taint(name).is_eval_side for name in call.arg_vars
+            ):
+                return True
         return False
 
     def disconnected_fit_transform_demo(self, fit: FitCall) -> bool:

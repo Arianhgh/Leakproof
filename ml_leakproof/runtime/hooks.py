@@ -22,6 +22,7 @@ _IN_HOOK_CALLBACK: contextvars.ContextVar[bool] = contextvars.ContextVar(
 _LOCK = threading.RLock()
 _PATCHES: list[tuple[Any, str, Any]] = []
 _PATCHED_KEYS: set[tuple[int, str]] = set()
+_ACTIVE_MANAGERS: set[int] = set()
 
 
 def current_session() -> Any | None:
@@ -55,7 +56,8 @@ class HookManager:
                 except Exception:
                     self._remove_patches()
                     raise
-                self._installed_by_me = True
+            _ACTIVE_MANAGERS.add(id(self))
+            self._installed_by_me = True
             self._token = _CURRENT_SESSION.set(self.session)
 
     def remove(self) -> None:
@@ -63,9 +65,13 @@ class HookManager:
             if self._token is not None:
                 _CURRENT_SESSION.reset(self._token)
                 self._token = None
-            # An outer context may still be active.  Its contextvar value is
-            # restored by reset, so patches remain until the final release.
-            if _CURRENT_SESSION.get() is None and _PATCHES:
+            if self._installed_by_me:
+                _ACTIVE_MANAGERS.discard(id(self))
+                self._installed_by_me = False
+            # ContextVars are local to a thread/task, so checking the current
+            # value cannot see a session active in another thread.  Keep the
+            # process-wide patch lease until every manager has released it.
+            if not _ACTIVE_MANAGERS and _PATCHES:
                 self._remove_patches()
 
     def _install_patches(self) -> None:

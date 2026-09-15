@@ -16,28 +16,29 @@ from ._helpers import location_of, notebook_note
 
 
 def _arg_taint(node: ast.Call, index: int, ctx: StaticContext) -> Taint:
-    values: list[ast.expr] = []
-    if index < len(node.args):
-        values.append(node.args[index])
-    keyword_names = (
-        ("y_true", "y", "target", "labels")
-        if index == 0
-        else ("y_pred", "pred", "prediction", "output", "scores")
+    # Call records capture the lexical scope and binding versions while the
+    # call is visited.  Looking up names after the whole file has been walked
+    # lets a module binding shadow a function parameter, or lets a later
+    # reassignment rewrite the meaning of an earlier metric call.
+    record = next(
+        (call for call in ctx.dataflow.calls if call.node is node),
+        None,
     )
-    values.extend(
-        keyword.value
-        for keyword in node.keywords
-        if keyword.arg in keyword_names
-    )
-    observed: list[Taint] = []
-    for arg in values:
-        for sub in ast.walk(arg):
-            if isinstance(sub, ast.Name):
-                taint = ctx.dataflow.taint_of(sub.id)
-                if taint is not Taint.UNKNOWN:
-                    observed.append(taint)
-    if observed:
-        return ctx.dataflow._merge_taints(observed)
+    if record is not None:
+        if index < len(node.args) and index < len(record.arg_taints):
+            return record.arg_taints[index]
+        keyword_names = (
+            ("y_true", "y", "target", "labels")
+            if index == 0
+            else ("y_pred", "pred", "prediction", "output", "scores")
+        )
+        observed = [
+            record.keyword_taints[name]
+            for name in keyword_names
+            if name in record.keyword_taints
+        ]
+        if observed:
+            return ctx.dataflow._merge_taints(observed)
     return Taint.UNKNOWN
 
 
@@ -141,7 +142,19 @@ class M002(StaticRule):
             tail = fname.rsplit(".", 1)[-1] if fname else None
             if tail not in self._CURVE_FUNCS:
                 continue
-            if _arg_taint(node, 0, ctx) is Taint.TEST:
+            call = next(
+                (
+                    record
+                    for record in ctx.dataflow.calls
+                    if record.node is node
+                ),
+                None,
+            )
+            if (
+                _arg_taint(node, 0, ctx) is Taint.TEST
+                and call is not None
+                and self._selects_threshold_from_curve(ctx, call)
+            ):
                 yield Finding(
                     rule_id=self.id,
                     category=self.category,
@@ -158,6 +171,41 @@ class M002(StaticRule):
                     fix=Fix(summary="Select the threshold on validation, evaluate on test once.", autofixable=False),
                     evidence={"func": tail},
                 )
+
+    def _selects_threshold_from_curve(self, ctx: StaticContext, call: object) -> bool:
+        """Require a threshold choice derived from curve metrics.
+
+        Plotting a test ROC/PR curve, or marking a fixed default threshold,
+        does not prove test-set tuning.  This bounded data-flow check follows
+        reductions of the curve metrics into an index and then into the
+        returned threshold array.
+        """
+
+        output_bindings = list(getattr(call, "output_binding_versions", {}).items())
+        if len(output_bindings) < 2:
+            return False
+        metric_vars = set(output_bindings[:-1])
+        threshold_vars = set(output_bindings[-1:])
+        derived = set(metric_vars)
+        scope_id = getattr(call, "scope_id", 0)
+        line = getattr(call, "line", 0)
+        dependencies = ctx.dataflow.assignment_dependencies_for_scope(scope_id)
+        assignments = [
+            (target, version, value)
+            for target, version, value in ctx.dataflow.assignment_records_for_scope(scope_id)
+            if getattr(value, "lineno", 0) > line
+        ]
+        assignments.sort(key=lambda item: getattr(item[2], "lineno", 0))
+        for target, version, _value in assignments:
+            binding_dependencies = {
+                (name, binding_version)
+                for name, binding_version in dependencies.get((target, version), {}).items()
+            }
+            if threshold_vars & binding_dependencies and derived & binding_dependencies:
+                return True
+            if derived & binding_dependencies:
+                derived.add((target.split("[", 1)[0], version))
+        return False
 
 
 @register

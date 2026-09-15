@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import ast
 from collections.abc import Iterable
 from typing import Any
 
@@ -11,7 +10,13 @@ from ...core.models import Category, Finding, Fix, Layer, Severity
 from ...core.references import KAUFMAN_2012, SKLEARN_CV, SKLEARN_PITFALLS
 from ...core.registry import register
 from ...core.rule import StaticRule
-from ._helpers import has_kwarg, kwarg_is_false, location_of, notebook_note, text_has_hint
+from ._helpers import (
+    has_kwarg,
+    input_has_related_hint,
+    kwarg_is_false,
+    location_of,
+    notebook_note,
+)
 from .preprocessing import _FullFitRule
 
 
@@ -194,13 +199,20 @@ class S002(StaticRule):
     _TIME_HINTS = ("date", "time", "timestamp", "datetime", "_dt", "year", "month", "day")
 
     def check(self, ctx: StaticContext) -> Iterable[Finding]:
-        if not self._temporal_signal(ctx):
-            return
         for split in ctx.dataflow.splits:
             if split.func_name != "train_test_split":
                 continue
             shuffle = has_kwarg(split.node, "shuffle")
             if shuffle is not None and kwarg_is_false(shuffle):
+                continue
+            if not input_has_related_hint(
+                ctx,
+                split.node,
+                split.input_vars,
+                split.input_binding_versions,
+                self._TIME_HINTS,
+                scope_id=split.scope_id,
+            ):
                 continue
             yield Finding(
                 rule_id=self.id,
@@ -218,47 +230,3 @@ class S002(StaticRule):
                 fix=Fix(summary="Add shuffle=False or switch to TimeSeriesSplit.", autofixable=False),
                 evidence={"func": split.func_name},
             )
-
-    def _temporal_signal(self, ctx: StaticContext) -> bool:
-        for node in ast.walk(ctx.tree):
-            if isinstance(node, ast.Name):
-                if text_has_hint(node.id, self._TIME_HINTS):
-                    return True
-            if isinstance(node, ast.Attribute) and node.attr in ("to_datetime", "resample"):
-                return True
-            if isinstance(node, ast.Call) and self._call_has_temporal_signal(node, ctx):
-                return True
-        return False
-
-    def _call_has_temporal_signal(self, node: ast.Call, ctx: StaticContext) -> bool:
-        name = ctx.dataflow.resolve_name(node.func) or ""
-        tail = name.rsplit(".", 1)[-1]
-        if tail in {"to_datetime", "date_range", "resample"}:
-            return True
-        if tail == "astype" and any(
-            isinstance(arg, ast.Constant)
-            and isinstance(arg.value, str)
-            and "datetime" in arg.value.lower()
-            for arg in [*node.args, *(kw.value for kw in node.keywords if kw.arg)]
-        ):
-            return True
-        if tail == "read_csv":
-            for kw in node.keywords:
-                if kw.arg == "parse_dates":
-                    return True
-        if tail in {"sort_values", "sort_index"}:
-            return self._args_reference_time_columns(node)
-        return False
-
-    def _args_reference_time_columns(self, node: ast.Call) -> bool:
-        values = list(node.args)
-        values.extend(kw.value for kw in node.keywords if kw.arg in {"by", "on", "key"})
-        for value in values:
-            for sub in ast.walk(value):
-                if (
-                    isinstance(sub, ast.Constant)
-                    and isinstance(sub.value, str)
-                    and text_has_hint(sub.value, self._TIME_HINTS)
-                ):
-                    return True
-        return False

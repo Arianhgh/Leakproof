@@ -76,6 +76,66 @@ def text_has_hint(value: str, hints: tuple[str, ...]) -> bool:
     return False
 
 
+def node_has_hint(node: ast.AST, hints: tuple[str, ...]) -> bool:
+    """Return whether a single expression contains a relevant lexical hint."""
+
+    for sub in ast.walk(node):
+        if isinstance(sub, ast.Constant) and isinstance(sub.value, str):
+            if text_has_hint(sub.value, hints):
+                return True
+        elif isinstance(sub, ast.Name) and text_has_hint(sub.id, hints):
+            return True
+        elif isinstance(sub, ast.Attribute) and text_has_hint(sub.attr, hints):
+            return True
+    return False
+
+
+def input_has_related_hint(
+    ctx: StaticContext,
+    node: ast.AST,
+    input_vars: Iterable[str],
+    input_binding_versions: dict[str, int],
+    hints: tuple[str, ...],
+    *,
+    scope_id: int,
+) -> bool:
+    """Find a hint on the operation or on the current input binding.
+
+    The previous implementation searched the complete module.  That made an
+    unrelated ``groups`` or ``date`` example affect every split in a notebook.
+    This bounded check only follows the operation's input names and the
+    versioned assignments that produced them.
+    """
+
+    if node_has_hint(node, hints):
+        return True
+    inputs = {name for name in input_vars if name and name != "?"}
+    if not inputs:
+        return False
+    line = getattr(node, "lineno", 0)
+    for target, version, value in ctx.dataflow.assignment_records_for_scope(scope_id):
+        if getattr(value, "lineno", 0) > line:
+            continue
+        parent = target.split("[", 1)[0]
+        expected = input_binding_versions.get(parent) or input_binding_versions.get(target)
+        if expected is not None and version != expected:
+            continue
+        value_names = set(_expr_names(value))
+        if parent in inputs or target in inputs:
+            if node_has_hint(value, hints):
+                return True
+        # A group/time column assignment derived from the same input object is
+        # relevant even when the helper variable is not passed to the split.
+        if text_has_hint(parent, hints) or text_has_hint(target, hints):
+            if inputs & value_names:
+                return True
+    return False
+
+
+def _expr_names(node: ast.AST) -> list[str]:
+    return [sub.id for sub in ast.walk(node) if isinstance(sub, ast.Name)]
+
+
 def classify_full_fit(fit: Any, ctx: StaticContext) -> str | None:
     """Return the rule id responsible for a leaky fit call, or None if clean.
 
@@ -92,7 +152,15 @@ def classify_full_fit(fit: Any, ctx: StaticContext) -> str | None:
     # directly; only the component-level delegated fits are exempt.
     if fit.in_pipeline:
         if fit.class_name and ctx.adapters.is_pipeline_constructor(fit.class_name):
-            return "S001"
+            # A standalone exploratory ``pipe.fit(full_data)`` is not a
+            # leakage finding unless the fitted pipeline is subsequently used
+            # for evaluation.  Held-out arguments remain an explicit
+            # violation even when no later consumer is visible.
+            if any(taint.is_eval_side for taint in fit.arg_taints):
+                return "S001"
+            if df.fit_output_used_for_evaluation(fit):
+                return "S001"
+            return None
         return None
     cls = fit.class_name
     # concat of train+test feeding a fit -> P002 (most specific)

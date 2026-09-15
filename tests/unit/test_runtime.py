@@ -71,6 +71,30 @@ def test_runtime_duplicate_values_use_split_positions_not_content():
     assert not session.diagnostics
 
 
+def test_runtime_tracks_mutated_and_combined_split_arrays():
+    from sklearn.preprocessing import StandardScaler
+
+    X = np.arange(240, dtype=float).reshape(120, 2)
+    cases = {
+        "replacement": "S001",
+        "combination": "P002",
+    }
+    for operation, expected_rule in cases.items():
+        with watch(Config()) as session:
+            from sklearn.model_selection import train_test_split
+
+            X_train, X_test = train_test_split(X, test_size=0.5, random_state=0)
+            if operation == "replacement":
+                prepared = X_train.copy()
+                prepared[:] = X_test
+            else:
+                prepared = X_train + X_test
+            StandardScaler().fit(prepared)
+        assert expected_rule in {finding.rule_id for finding in session.findings}
+        assert session.result.complete
+        assert not session.diagnostics
+
+
 def test_runtime_tracks_every_array_returned_by_split():
     with watch(Config()) as session:
         from sklearn.model_selection import train_test_split
@@ -320,6 +344,42 @@ def test_runtime_watch_requires_runtime_layer_before_hooks():
         with watch(Config(layers=[Layer.STATIC])):
             pass
     assert ms.train_test_split is before
+
+
+def test_concurrent_watch_sessions_keep_hooks_until_last_exit():
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier, Event
+
+    from sklearn.preprocessing import StandardScaler
+
+    entered = Barrier(2)
+    first_exited = Event()
+    X = np.arange(160, dtype=float).reshape(80, 2)
+
+    def first_session() -> None:
+        with watch(Config()):
+            entered.wait(timeout=10)
+        first_exited.set()
+
+    def second_session() -> Any:
+        with watch(Config()) as session:
+            entered.wait(timeout=10)
+            assert first_exited.wait(timeout=10)
+            from sklearn.model_selection import train_test_split
+
+            _, X_test = train_test_split(X, test_size=0.25, random_state=0)
+            StandardScaler().fit(X_test)
+        return session
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(first_session)
+        second = pool.submit(second_session)
+        first.result(timeout=30)
+        session = second.result(timeout=30)
+
+    assert "S001" in {finding.rule_id for finding in session.findings}
+    assert session.result.complete
+    assert not session.diagnostics
 
 
 def test_runtime_split_helpers_snapshot_rng_and_support_shapes():

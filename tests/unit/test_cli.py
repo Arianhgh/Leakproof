@@ -59,6 +59,18 @@ def test_check_json_format(tmp_path):
     assert any(x["rule_id"] == "P001" for x in obj["findings"])
 
 
+def test_run_json_keeps_script_stdout_separate(tmp_path):
+    f = tmp_path / "script.py"
+    f.write_text("print('script output')\n")
+    res = runner.invoke(app, ["run", str(f), "--format", "json"])
+
+    assert res.exit_code == 0
+    obj = json.loads(res.stdout)
+    assert obj["completion"] == "complete"
+    assert "script output" not in res.stdout
+    assert "script output" in res.stderr
+
+
 def test_select_ignore(tmp_path):
     f = tmp_path / "m.py"
     f.write_text(LEAKY)

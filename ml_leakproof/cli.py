@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import io
 import json
+from contextlib import redirect_stdout
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -349,7 +351,14 @@ def run(
         _validate_report_request(fmt, output)
         if not script.exists() or not script.is_file():
             raise ConfigError(f"script does not exist: {script}")
-        result = run_script_result(script, list(args or []), cfg)
+        script_stdout = io.StringIO()
+        with redirect_stdout(script_stdout):
+            result = run_script_result(script, list(args or []), cfg)
+        # Keep stdout machine-readable for JSON/SARIF/Markdown consumers.  A
+        # user's print() output remains visible, but is routed to stderr so it
+        # cannot corrupt the selected report format.
+        if output_text := script_stdout.getvalue():
+            typer.echo(output_text, err=True, nl=False)
     except KeyboardInterrupt:
         raise
     except (ConfigError, ValueError) as exc:

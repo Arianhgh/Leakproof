@@ -46,19 +46,19 @@ remain review evidence even when a caller lowers the gate-confidence threshold.
 
 ### C001 — preprocessing fit outside CV loop
 
-Fitting a transformer once on all data and reusing it across CV folds leaks validation-fold statistics into training. Put the transformer in a Pipeline passed to cross_val_score/GridSearchCV so it is refit per fold.
+Fitting a transformer once on all data and reusing it across CV folds leaks validation-fold statistics into training. The static check requires the fitted result to reach a CV/search consumer; disconnected demonstrations are ignored. Put the transformer in a Pipeline passed to cross_val_score/GridSearchCV so it is refit per fold.
 
 References: https://scikit-learn.org/stable/common_pitfalls.html, https://scikit-learn.org/stable/modules/cross_validation.html
 
 ### C002 — plain KFold on grouped data
 
-When the same entity (patient/user/session) has multiple rows, a plain KFold or train_test_split can place rows from one entity on both sides of the split. Use GroupKFold/StratifiedGroupKFold.
+When the same entity (patient/user/session) has multiple rows, a plain KFold or train_test_split can place rows from one entity on both sides of the split. The check requires group evidence tied to that operation, such as a group column derived from its input or groups= on the corresponding CV call. Use GroupKFold/StratifiedGroupKFold.
 
 References: https://scikit-learn.org/stable/modules/cross_validation.html
 
 ### C003 — plain KFold on time series
 
-Random KFold on time-ordered data trains on the future to predict the past. Use TimeSeriesSplit.
+Random KFold on time-ordered data trains on the future to predict the past. The check requires time evidence tied to the splitter's input rather than an unrelated date/time example elsewhere in the module. Use TimeSeriesSplit.
 
 References: https://scikit-learn.org/stable/modules/cross_validation.html
 
@@ -70,7 +70,7 @@ References: https://doi.org/10.1016/j.patter.2023.100804, https://scikit-learn.o
 
 ### C005 — model selection without nested CV
 
-Reporting a hyperparameter search's best_score_ as model performance reuses the selection folds for evaluation, biasing the estimate upward. Use nested CV.
+Reporting a hyperparameter search's best_score_ as model performance reuses the selection folds for evaluation, biasing the estimate upward. When the source also evaluates the selected search on an independent held-out split, nested CV is not required. Otherwise use nested CV.
 
 References: https://doi.org/10.1016/j.patter.2023.100804, https://scikit-learn.org/stable/modules/cross_validation.html
 
@@ -124,7 +124,7 @@ References: https://scikit-learn.org/stable/common_pitfalls.html
 
 ### M002 — decision threshold tuned on test
 
-Selecting a classification threshold from a curve computed on the test labels tunes the decision rule on the data you report on. Pick the threshold on a validation split.
+Selecting a classification threshold from a curve computed on the test labels tunes the decision rule on the data you report on. The check requires a threshold/index to be derived from the curve metrics; plotting a curve or marking a fixed default threshold is not enough. Pick the threshold on a validation split.
 
 References: https://doi.org/10.1016/j.patter.2023.100804
 
@@ -160,7 +160,7 @@ References: https://scikit-learn.org/stable/common_pitfalls.html, https://doi.or
 
 ### R001 — missing random_state/seed
 
-Without a fixed seed, splits and stochastic estimators vary run to run, making results irreproducible (and inviting seed cherry-picking).
+Without a fixed seed, splits and stochastic estimators vary run to run, making results irreproducible (and inviting seed cherry-picking). KMeans with an explicit array init and n_init=1 is deterministic for this purpose and is exempt.
 
 ### R002 — nondeterministic framework ops
 

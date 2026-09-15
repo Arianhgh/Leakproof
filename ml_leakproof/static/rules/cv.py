@@ -12,7 +12,11 @@ from ...core.references import KAPOOR_NARAYANAN_2023, SKLEARN_CV, SKLEARN_PITFAL
 from ...core.registry import register
 from ...core.rule import RuntimeRule, StaticRule
 from ..dataflow import Taint
-from ._helpers import location_of, notebook_note, text_has_hint
+from ._helpers import (
+    input_has_related_hint,
+    location_of,
+    notebook_note,
+)
 
 _GROUP_HINTS = (
     "group",
@@ -28,21 +32,80 @@ _GROUP_HINTS = (
 _TIME_HINTS = ("date", "time", "timestamp", "datetime", "_dt")
 
 
-def _string_or_name_hits(ctx: StaticContext, hints: tuple[str, ...]) -> bool:
-    for node in ast.walk(ctx.tree):
-        if isinstance(node, ast.Constant) and isinstance(node.value, str):
-            if text_has_hint(node.value, hints):
-                return True
-        if isinstance(node, ast.Name) and text_has_hint(node.id, hints):
-            return True
-    return False
+_OUTER_CV_CALLS = {"cross_val_score", "cross_validate", "cross_val_predict"}
 
 
-def _groups_kwarg_present(ctx: StaticContext) -> bool:
-    for c in ctx.dataflow.calls:
-        if "groups" in c.keywords:
-            return True
-    return False
+def _associated_splitter_use(ctx: StaticContext, splitter: Any) -> list[Any]:
+    outputs = set(splitter.output_binding_versions)
+    uses: list[Any] = []
+    for call in ctx.dataflow.calls:
+        if call.scope_id != splitter.scope_id:
+            continue
+        if call.func_name == "split" and call.receiver_var in outputs:
+            if call.receiver_binding_version == splitter.output_binding_versions.get(
+                call.receiver_var
+            ):
+                uses.append(call)
+        if call.func_name in _OUTER_CV_CALLS and "groups" in call.keywords:
+            cv_value = call.keywords.get("cv")
+            if cv_value is None:
+                continue
+            cv_names = {
+                node.id for node in ast.walk(cv_value) if isinstance(node, ast.Name)
+            }
+            if cv_names & outputs or splitter.node in ast.walk(cv_value):
+                uses.append(call)
+    return uses
+
+
+def _has_group_signal(ctx: StaticContext, call: Any) -> bool:
+    if input_has_related_hint(
+        ctx,
+        call.node,
+        call.arg_vars,
+        call.arg_binding_versions,
+        _GROUP_HINTS,
+        scope_id=call.scope_id,
+    ):
+        return True
+    if not ctx.adapters.is_cv_splitter(call.func_name):
+        return False
+    return any(
+        input_has_related_hint(
+            ctx,
+            use.node,
+            use.arg_vars,
+            use.arg_binding_versions,
+            _GROUP_HINTS,
+            scope_id=use.scope_id,
+        )
+        for use in _associated_splitter_use(ctx, call)
+    )
+
+
+def _has_temporal_signal(ctx: StaticContext, call: Any) -> bool:
+    if input_has_related_hint(
+        ctx,
+        call.node,
+        call.arg_vars,
+        call.arg_binding_versions,
+        _TIME_HINTS,
+        scope_id=call.scope_id,
+    ):
+        return True
+    if not ctx.adapters.is_cv_splitter(call.func_name):
+        return False
+    return any(
+        input_has_related_hint(
+            ctx,
+            use.node,
+            use.arg_vars,
+            use.arg_binding_versions,
+            _TIME_HINTS,
+            scope_id=use.scope_id,
+        )
+        for use in _associated_splitter_use(ctx, call)
+    )
 
 
 @register
@@ -107,15 +170,12 @@ class C001(StaticRule, RuntimeRule):
                 continue
             if not (fit.is_transformer or fit.is_feature_selector):
                 continue
-            if ctx.dataflow.disconnected_fit_transform_demo(fit):
+            if fit.class_name and ctx.adapters.is_stateless_transformer(fit.class_name):
                 continue
-            # A preprocessing fit used by this CV/search operation is owned by
-            # C001, including a full-data fit performed before an outer
-            # holdout split.  Other full-data observations remain owned by the
-            # specialized P/S rules.
-            from ._helpers import classify_full_fit
-
-            if classify_full_fit(fit, ctx) is not None and not ctx.dataflow.fit_output_used_by_cv(fit):
+            # Only a fit whose learned result reaches this file's CV/search
+            # consumer is a C001 observation.  Disconnected demonstrations
+            # in educational notebooks are not leakage.
+            if not ctx.dataflow.fit_output_used_by_cv(fit):
                 continue
             cls = fit.class_name or "transformer"
             yield Finding(
@@ -154,9 +214,6 @@ class C002(StaticRule):
     )
 
     def check(self, ctx: StaticContext) -> Iterable[Finding]:
-        grouped = _string_or_name_hits(ctx, _GROUP_HINTS) or _groups_kwarg_present(ctx)
-        if not grouped:
-            return
         seen: set[int] = set()
         for c in ctx.dataflow.calls:
             if not (
@@ -168,6 +225,8 @@ class C002(StaticRule):
             if id(c.node) in seen:
                 continue
             seen.add(id(c.node))
+            if not _has_group_signal(ctx, c):
+                continue
             yield Finding(
                 rule_id=self.id,
                 category=self.category,
@@ -201,8 +260,6 @@ class C003(StaticRule):
     )
 
     def check(self, ctx: StaticContext) -> Iterable[Finding]:
-        if not _string_or_name_hits(ctx, _TIME_HINTS):
-            return
         seen: set[int] = set()
         for c in ctx.dataflow.calls:
             if not ctx.adapters.is_cv_splitter(c.func_name):
@@ -212,6 +269,8 @@ class C003(StaticRule):
             if id(c.node) in seen:
                 continue
             seen.add(id(c.node))
+            if not _has_temporal_signal(ctx, c):
+                continue
             yield Finding(
                 rule_id=self.id,
                 category=self.category,
@@ -323,6 +382,20 @@ class C005(StaticRule):
                         if cls and ctx.adapters.is_search_constructor(cls):
                             wraps_in_outer_cv = True
         if uses_best_score and not wraps_in_outer_cv:
+            search_fits = [
+                fit
+                for fit in ctx.dataflow.fit_calls
+                if fit.method == "fit"
+                and fit.class_name
+                and ctx.adapters.is_search_constructor(fit.class_name)
+            ]
+            # In a source module/notebook, a demonstrated independent holdout
+            # is a valid alternative to nested CV for the selected model.  The
+            # notebook analyzer does not reconstruct execution state, so use
+            # the module-level holdout evidence conservatively rather than
+            # attributing a later rebinding to a different search.
+            if any(ctx.dataflow.search_has_holdout_evaluation(fit) for fit in search_fits):
+                return
             c = search_calls[0]
             yield Finding(
                 rule_id=self.id,

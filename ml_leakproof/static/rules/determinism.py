@@ -94,6 +94,8 @@ class R001(StaticRule):
         return any(kw.arg is None for kw in node.keywords)
 
     def _call_needs_local_seed(self, call: Any) -> bool:
+        if call.func_name == "KMeans" and self._has_fixed_array_init(call.node):
+            return False
         if call.func_name in {"KFold", "StratifiedKFold"}:
             return kwarg_is_true(has_kwarg(call.node, "shuffle"))
         if call.func_name == "LogisticRegression":
@@ -103,6 +105,13 @@ class R001(StaticRule):
         if call.func_name == "SVC":
             return kwarg_is_true(has_kwarg(call.node, "probability"))
         return True
+
+    def _has_fixed_array_init(self, node: ast.Call) -> bool:
+        init = has_kwarg(node, "init")
+        if init is None or isinstance(init, ast.Constant):
+            return False
+        n_init = has_kwarg(node, "n_init")
+        return isinstance(n_init, ast.Constant) and n_init.value == 1
 
     def _constant_kwarg(self, node: ast.Call, name: str) -> Any:
         value = has_kwarg(node, name)

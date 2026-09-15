@@ -138,12 +138,126 @@ def _tracked_array_type() -> type[Any] | None:
                         "NumPy operation could not propagate array provenance",
                     )
 
+        def __setitem__(self, key: Any, value: Any) -> None:
+            super().__setitem__(key, value)
+            try:
+                from .hooks import current_session
+
+                session = current_session()
+                table = getattr(session, "taint", None)
+                if table is None or getattr(self, _OWNER_ATTRIBUTE, None) is not getattr(
+                    table, "_owner_token", None
+                ):
+                    return
+                tracker = getattr(table, "track_array_mutation", None)
+                if callable(tracker):
+                    tracker(self, key, value)
+            except Exception:
+                # The assignment itself has already succeeded.  A failed
+                # provenance update is handled as unknown coverage when the
+                # object is consumed by the active session.
+                try:
+                    from .hooks import current_session
+
+                    session = current_session()
+                    table = getattr(session, "taint", None)
+                    if table is not None:
+                        marker = getattr(table, "mark_unsupported", None)
+                        if callable(marker):
+                            marker(self, "in-place NumPy mutation could not propagate array provenance")
+                except Exception:
+                    pass
+
+        def __array_ufunc__(
+            self, ufunc: Any, method: str, *inputs: Any, **kwargs: Any
+        ) -> Any:
+            if method != "__call__":
+                base_inputs = tuple(
+                    value.view(np.ndarray) if isinstance(value, np.ndarray) else value
+                    for value in inputs
+                )
+                call_kwargs = dict(kwargs)
+                out_values = call_kwargs.get("out")
+                if out_values is not None:
+                    outputs = out_values if isinstance(out_values, tuple) else (out_values,)
+                    call_kwargs["out"] = tuple(
+                        value.view(np.ndarray) if isinstance(value, np.ndarray) else value
+                        for value in outputs
+                    )
+                return getattr(ufunc, method)(*base_inputs, **call_kwargs)
+            try:
+                from .hooks import current_session
+
+                session = current_session()
+                table = getattr(session, "taint", None)
+                if table is None:
+                    base_inputs = tuple(
+                        value.view(np.ndarray) if isinstance(value, np.ndarray) else value
+                        for value in inputs
+                    )
+                    return getattr(ufunc, method)(*base_inputs, **kwargs)
+                arrays = [
+                    value
+                    for value in inputs
+                    if isinstance(value, np.ndarray)
+                    and getattr(value, "ndim", 0) > 0
+                ]
+                lineages = [table.lineage_for(value) for value in arrays]
+                if not any(lineage is not None for lineage in lineages):
+                    base_inputs = tuple(
+                        value.view(np.ndarray) if isinstance(value, np.ndarray) else value
+                        for value in inputs
+                    )
+                    return getattr(ufunc, method)(*base_inputs, **kwargs)
+
+                # Run the operation on base arrays so ndarray's default
+                # ``__array_finalize__`` cannot silently choose the first
+                # operand's ancestry.  The table then combines every input
+                # lineage or records an unsupported propagation.
+                base_inputs = tuple(
+                    value.view(np.ndarray) if isinstance(value, np.ndarray) else value
+                    for value in inputs
+                )
+                call_kwargs = dict(kwargs)
+                out_values = call_kwargs.get("out")
+                if out_values is not None:
+                    outputs = out_values if isinstance(out_values, tuple) else (out_values,)
+                    call_kwargs["out"] = tuple(
+                        value.view(np.ndarray) if isinstance(value, np.ndarray) else value
+                        for value in outputs
+                    )
+                result = getattr(ufunc, method)(*base_inputs, **call_kwargs)
+                tracker = getattr(table, "track_numpy_operation", None)
+                if callable(tracker):
+                    tracked_result = tracker(arrays, result)
+                    if out_values is not None:
+                        # NumPy returns the supplied out object, not its base
+                        # view.  The table has already updated its lineage.
+                        return out_values[0] if isinstance(out_values, tuple) else out_values
+                    return tracked_result
+                return result
+            except Exception:
+                base_inputs = tuple(
+                    value.view(np.ndarray) if isinstance(value, np.ndarray) else value
+                    for value in inputs
+                )
+                return getattr(ufunc, method)(*base_inputs, **kwargs)
+
         def __getitem__(self, key: Any) -> Any:
             result = super().__getitem__(key)
             if not isinstance(result, np.ndarray) or result.ndim == 0:
                 return result
             lineage = getattr(self, _LINEAGE_ATTRIBUTE, None)
             if not isinstance(lineage, Lineage):
+                return result
+            if lineage.mixed and len(lineage.rows) != self.shape[0]:
+                if hasattr(result, _LINEAGE_ATTRIBUTE):
+                    delattr(result, _LINEAGE_ATTRIBUTE)
+                setattr(
+                    result,
+                    _UNSUPPORTED_ATTRIBUTE,
+                    "NumPy indexing could not resolve mixed array provenance",
+                )
                 return result
             positions = _numpy_row_positions(self, result, key)
             if positions is None:
@@ -177,6 +291,20 @@ def _numpy_row_positions(source: Any, result: Any, key: Any) -> list[int] | None
     """Return exact row positions for a row-preserving ndarray selection."""
 
     try:
+        positions = _numpy_row_positions_for_key(source, key)
+        if positions is None:
+            return None
+        if getattr(result, "shape", (None,))[0] != len(positions):
+            return None
+        return positions
+    except Exception:
+        return None
+
+
+def _numpy_row_positions_for_key(source: Any, key: Any) -> list[int] | None:
+    """Return source row positions selected by an ndarray indexing key."""
+
+    try:
         import numpy as np
 
         row_key = key[0] if isinstance(key, tuple) and key else key
@@ -185,36 +313,45 @@ def _numpy_row_positions(source: Any, result: Any, key: Any) -> list[int] | None
         if row_key is None:
             return None
         if isinstance(row_key, slice):
-            positions = list(range(*row_key.indices(source.shape[0])))
-        elif np.isscalar(row_key):
+            return list(range(*row_key.indices(source.shape[0])))
+        if np.isscalar(row_key):
             position = operator.index(cast(Any, row_key))
             if position < 0:
                 position += source.shape[0]
             if position < 0 or position >= source.shape[0]:
                 return None
-            positions = [position]
-        else:
-            index_array = np.asarray(row_key)
-            if index_array.ndim != 1:
-                return None
-            if index_array.dtype.kind == "b":
-                if len(index_array) != source.shape[0]:
-                    return None
-                positions = np.flatnonzero(index_array).astype(int).tolist()
-            else:
-                positions = []
-                for value in index_array.tolist():
-                    position = operator.index(value)
-                    if position < 0:
-                        position += source.shape[0]
-                    if position < 0 or position >= source.shape[0]:
-                        return None
-                    positions.append(position)
-        if getattr(result, "shape", (None,))[0] != len(positions):
+            return [position]
+        index_array = np.asarray(row_key)
+        if index_array.ndim != 1:
             return None
+        if index_array.dtype.kind == "b":
+            if len(index_array) != source.shape[0]:
+                return None
+            return [int(position) for position in np.flatnonzero(index_array).tolist()]
+        positions: list[int] = []
+        for value in index_array.tolist():
+            position = operator.index(value)
+            if position < 0:
+                position += source.shape[0]
+            if position < 0 or position >= source.shape[0]:
+                return None
+            positions.append(position)
         return positions
     except Exception:
         return None
+
+
+def _numpy_key_covers_all_columns(source: Any, key: Any) -> bool:
+    """Return whether an ndarray assignment replaces complete selected rows."""
+
+    if not isinstance(key, tuple) or len(key) <= 1:
+        return True
+    for column_key in key[1:]:
+        if column_key is Ellipsis:
+            continue
+        if not isinstance(column_key, slice) or column_key != slice(None):
+            return False
+    return True
 
 
 def _should_report_unsupported() -> bool:
@@ -325,6 +462,14 @@ class TaintTable:
             item for item in self._unsupported_objects if not item.matches(obj)
         ]
 
+    def _forget_object(self, obj: Any) -> None:
+        self._objects = [item for item in self._objects if not item.matches(obj)]
+        for attribute in (_OWNER_ATTRIBUTE, _LINEAGE_ATTRIBUTE, _UNSUPPORTED_ATTRIBUTE):
+            try:
+                delattr(obj, attribute)
+            except Exception:
+                pass
+
     def _set_array_metadata(self, obj: Any, lineage: Lineage) -> None:
         try:
             array_type = _tracked_array_type()
@@ -341,6 +486,7 @@ class TaintTable:
 
         if obj is None:
             return
+        self._forget_object(obj)
         for item in self._unsupported_objects:
             if item.matches(obj):
                 return
@@ -353,6 +499,121 @@ class TaintTable:
         self._unsupported_objects.append(
             _UnsupportedObject(ref=ref, strong=strong, message=message)
         )
+
+    def track_array_mutation(self, target: Any, key: Any, value: Any) -> bool:
+        """Update or invalidate lineage after an in-place ndarray assignment."""
+
+        lineage = self.lineage_for(target)
+        if lineage is None:
+            return False
+        try:
+            import numpy as np
+
+            if not isinstance(target, np.ndarray) or target.ndim == 0:
+                self.mark_unsupported(target, "in-place NumPy mutation has no row axis")
+                return False
+            positions = _numpy_row_positions_for_key(target, key)
+            if positions is None or len(lineage.rows) != target.shape[0]:
+                self.mark_unsupported(
+                    target,
+                    "in-place NumPy mutation could not propagate array provenance",
+                )
+                return False
+            if not isinstance(value, np.ndarray) or value.ndim == 0:
+                # Assigning a scalar leaves each row's source identity intact.
+                return True
+            source_lineage = self.lineage_for(value)
+            if source_lineage is None or len(source_lineage.rows) != len(positions):
+                self.mark_unsupported(
+                    target,
+                    "in-place NumPy mutation used an untracked or incompatible array",
+                )
+                return False
+            origins = lineage.transform_origins | source_lineage.transform_origins
+            if _numpy_key_covers_all_columns(target, key):
+                rows = list(lineage.rows)
+                for position, row in zip(positions, source_lineage.rows):
+                    rows[position] = row
+                updated = Lineage(
+                    tuple(rows),
+                    supported=lineage.supported and source_lineage.supported,
+                    mixed=lineage.mixed or source_lineage.mixed,
+                    transform_origins=origins,
+                )
+            else:
+                rows = list(dict.fromkeys((*lineage.rows, *source_lineage.rows)))
+                updated = Lineage(
+                    tuple(rows),
+                    supported=False,
+                    mixed=True,
+                    transform_origins=origins,
+                )
+            self._track_object(target, updated)
+            return True
+        except Exception:
+            self.mark_unsupported(
+                target,
+                "in-place NumPy mutation could not propagate array provenance",
+            )
+            return False
+
+    def track_numpy_operation(self, sources: Iterable[Any], transformed: Any) -> Any:
+        """Propagate ancestry through an ndarray operation using input identity."""
+
+        try:
+            import numpy as np
+        except Exception:  # pragma: no cover
+            return transformed
+        if not isinstance(transformed, np.ndarray) or transformed.ndim == 0:
+            return transformed
+        arrays = [
+            source
+            for source in sources
+            if isinstance(source, np.ndarray) and getattr(source, "ndim", 0) > 0
+        ]
+        lineages = [self.lineage_for(source) for source in arrays]
+        known = [lineage for lineage in lineages if lineage is not None]
+        if not known:
+            return transformed
+        if len(known) != len(lineages):
+            self.mark_unsupported(
+                transformed,
+                "NumPy operation combined tracked and untracked arrays",
+            )
+            return transformed
+        origins = frozenset().union(*(lineage.transform_origins for lineage in known))
+        if all(lineage.rows == known[0].rows for lineage in known[1:]):
+            source_len = len(self._values_for(arrays[0])) if arrays else 0
+            if len(known[0].rows) != transformed.shape[0] and not (
+                known[0].mixed and source_len == transformed.shape[0]
+            ):
+                self.mark_unsupported(
+                    transformed,
+                    "NumPy operation changed the row axis during provenance propagation",
+                )
+                return transformed
+            lineage = Lineage(
+                known[0].rows,
+                supported=all(item.supported for item in known),
+                mixed=any(item.mixed for item in known),
+                transform_origins=origins,
+            )
+        elif all(len(item.rows) == transformed.shape[0] for item in known):
+            rows = list(dict.fromkeys(row for item in known for row in item.rows))
+            lineage = Lineage(
+                tuple(rows),
+                supported=False,
+                mixed=True,
+                transform_origins=origins,
+            )
+        else:
+            self.mark_unsupported(
+                transformed,
+                "NumPy operation changed the row axis during provenance propagation",
+            )
+            return transformed
+        self._track_object(transformed, lineage)
+        return self.wrap_numpy_result(transformed)
 
     def lineage_for(self, obj: Any) -> Lineage | None:
         for tracked in reversed(self._objects):
@@ -381,7 +642,7 @@ class TaintTable:
                 if not tracked.matches(base):
                     continue
                 rows = self._shared_numpy_rows_if_possible(base, obj, tracked.lineage.rows)
-                if rows is None:
+                if rows is None and len(tracked.lineage.rows) == len(self._values_for(base)):
                     rows = self._match_output_rows(base, obj, tracked.lineage.rows)
                 if rows is not None:
                     lineage = Lineage(
@@ -746,6 +1007,19 @@ class TaintTable:
                 return False
         output_len = len(self._values_for(transformed))
         if row_indices is None:
+            source_len = len(self._values_for(source))
+            if source_lineage.mixed and output_len == source_len:
+                self._track_object(
+                    transformed,
+                    Lineage(
+                        source_lineage.rows,
+                        supported=False,
+                        mixed=True,
+                        transform_origins=source_lineage.transform_origins
+                        | ({origin} if origin is not None else set()),
+                    ),
+                )
+                return True
             if output_len != len(source_lineage.rows):
                 self._diagnostics.append({"code": "LP412", "message": "length-changing transform requires row_indices"})
                 return False
