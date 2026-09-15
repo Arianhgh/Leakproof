@@ -1,10 +1,10 @@
 {
-  "description": "Real-world public ML repositories for a static-only leakage audit.",
+  "description": "Real-world public ML repositories pinned to immutable commits for a static-only leakage audit.",
   "repos": [
-    {"name": "scikit-learn-videos",   "url": "https://github.com/justmarkham/scikit-learn-videos",        "domain": "tabular"},
-    {"name": "pycon-2016-tutorial",   "url": "https://github.com/justmarkham/pycon-2016-tutorial",        "domain": "nlp"},
-    {"name": "intro-to-ml-sklearn",   "url": "https://github.com/amueller/introduction_to_ml_with_python", "domain": "tabular"},
-    {"name": "ml-with-python",        "url": "https://github.com/susanli2016/Machine-Learning-with-Python", "domain": "mixed"},
-    {"name": "ds-from-scratch",       "url": "https://github.com/joelgrus/data-science-from-scratch",       "domain": "tabular"}
+    {"name": "scikit-learn-videos", "url": "https://github.com/justmarkham/scikit-learn-videos", "commit": "8545c74961398def7724501648fd504dbf061b41", "domain": "tabular"},
+    {"name": "pycon-2016-tutorial", "url": "https://github.com/justmarkham/pycon-2016-tutorial", "commit": "5339710562cc46c4a32a369d63f1e8751a18a54e", "domain": "nlp"},
+    {"name": "intro-to-ml-sklearn", "url": "https://github.com/amueller/introduction_to_ml_with_python", "commit": "ea60cf6cf791553b6cca7cf31802c68cb3798ebb", "domain": "tabular"},
+    {"name": "ml-with-python", "url": "https://github.com/susanli2016/Machine-Learning-with-Python", "commit": "87cbe5caa5ce6c219ad92bb0c720f06aaf9c8773", "domain": "mixed"},
+    {"name": "ds-from-scratch", "url": "https://github.com/joelgrus/data-science-from-scratch", "commit": "d5d0f117f41b3ccab3b07f1ee1fa21cfcf69afa1", "domain": "tabular"}
   ]
 }

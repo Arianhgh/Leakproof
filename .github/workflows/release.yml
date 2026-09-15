@@ -1,0 +1,55 @@
+name: release
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish the validated artifacts to PyPI"
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install release tooling
+        run: python -m pip install -e ".[dev,data,runtime]"
+      - name: Verify version and checks
+        run: |
+          test "$(python -m ml_leakproof version)" = "0.2.0rc1"
+          ruff check ml_leakproof
+          mypy --strict ml_leakproof
+          coverage run --branch -m pytest -q
+          coverage report --include='ml_leakproof/core/config.py,ml_leakproof/core/aggregate.py,ml_leakproof/data/hashing.py,ml_leakproof/autofix.py,ml_leakproof/runtime/hooks.py' --fail-under=90
+      - name: Build distributions
+        run: python -m build
+      - name: Validate distribution metadata
+        run: twine check dist/*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ml-leakproof-0.2.0rc1
+          path: dist/*
+
+  publish:
+    needs: validate
+    if: ${{ inputs.publish == true }}
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: ml-leakproof-0.2.0rc1
+          path: dist
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/

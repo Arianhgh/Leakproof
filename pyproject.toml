@@ -1,15 +1,15 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.25"]
 build-backend = "hatchling.build"
 
 [project]
-name = "leakproof"
-version = "0.1.0"
-description = "A hybrid (static + data + runtime) leakage and evaluation-rigor checker for ML/data-science code."
+name = "ml-leakproof"
+dynamic = ["version"]
+description = "Leakproof: static, dataset, and runtime leakage/evaluation-rigor checks for ML workflows."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
-authors = [{ name = "leakproof contributors" }]
+authors = [{ name = "Arianhgh" }]
 keywords = ["machine-learning", "data-leakage", "linter", "static-analysis", "ml-evaluation", "ci"]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -20,6 +20,7 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Software Development :: Quality Assurance",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
@@ -32,76 +33,114 @@ dependencies = [
 
 [project.optional-dependencies]
 data = [
-    "pandas>=1.5",
+    "pandas>=2.0",
     "numpy>=1.23",
     "scikit-learn>=1.1",
     "scipy>=1.9",
     "datasketch>=1.5",
     "imagehash>=4.3",
+    "Pillow>=9.0",
 ]
 runtime = [
     "wrapt>=1.14",
+    "numpy>=1.23",
     "scikit-learn>=1.1",
+]
+runtime-integrations = [
+    "imbalanced-learn>=0.10",
+    "xgboost>=1.7",
+    "lightgbm>=3.3",
 ]
 llm = [
     "anthropic>=0.25",
     "openai>=1.0",
 ]
-cst = [
-    "libcst>=1.0",
-]
+fix = ["libcst>=1.0"]
+# Retained as a migration alias for 0.1 users.
+cst = ["libcst>=1.0"]
 dev = [
-    "ruff>=0.4",
+    "build>=1.2",
+    "hatch>=1.14",
+    "hypothesis>=6.100",
+    "jsonschema>=4.20",
     "mypy>=1.8",
     "pre-commit>=3.0",
-    "pandas>=1.5",
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "ruff>=0.4",
+    "twine>=5.0",
+    "pandas>=2.0",
     "numpy>=1.23",
     "scikit-learn>=1.1",
     "scipy>=1.9",
     "wrapt>=1.14",
+    "libcst>=1.0",
 ]
 
 [project.scripts]
-leakproof = "leakproof.cli:app"
+ml-leakproof = "ml_leakproof.cli:app"
 
 [project.urls]
-Homepage = "https://github.com/leakproof/leakproof"
-Documentation = "https://github.com/leakproof/leakproof#readme"
-Issues = "https://github.com/leakproof/leakproof/issues"
+Homepage = "https://github.com/Arianhgh/Leakproof"
+Documentation = "https://github.com/Arianhgh/Leakproof#readme"
+Issues = "https://github.com/Arianhgh/Leakproof/issues"
 
-[project.entry-points."leakproof.rules"]
-# third-party plugins register here; built-ins are registered via decorator import
+[project.entry-points."ml_leakproof.rules"]
+# Third-party plugins register here; built-ins are registered by the package.
 
-[project.entry-points."leakproof.adapters"]
-# third-party framework adapters register here
+[project.entry-points."ml_leakproof.adapters"]
+# Third-party framework adapters register here.
+
+[tool.hatch.version]
+path = "ml_leakproof/_version.py"
 
 [tool.hatch.build.targets.wheel]
-packages = ["leakproof"]
+packages = ["ml_leakproof"]
 
 [tool.hatch.build.targets.sdist]
-include = ["leakproof", "README.md", "SKILL.md", "LICENSE"]
+include = [
+    "ml_leakproof",
+    "tests",
+    "docs",
+    "README.md",
+    "SKILL.md",
+    "LICENSE",
+    "leakproof.toml",
+    "action.yml",
+    ".pre-commit-config.yaml",
+]
+exclude = [".leakproof-corpus", ".mypy_cache", ".pytest_cache", ".ruff_cache"]
 
 [tool.leakproof]
 select = ["ALL"]
 ignore = []
 fail_on = "high"
-exclude = ["examples/", ".venv/", "build/", "dist/"]
+exclude = ["tests/", "examples/", ".venv/", "build/", "dist/"]
 layers = ["static", "data", "runtime"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+norecursedirs = ["tests/fixtures", ".leakproof-corpus", "build", "dist"]
+addopts = "--strict-markers"
+markers = [
+    "integration: tests that exercise installed packages or optional integrations",
+    "slow: bounded but slower corpus or large-input checks",
+]
 
 [tool.ruff]
 line-length = 100
 target-version = "py310"
-extend-exclude = [".leakproof-corpus"]
+extend-exclude = [".leakproof-corpus", "build", "dist"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "W"]
-# B008: typer uses Option()/Argument() as defaults by design.
+# B008: Typer uses Option()/Argument() as defaults by design.
 ignore = ["E501", "B905", "B008"]
 
 [tool.mypy]
 python_version = "3.10"
-# version-guarded imports (tomli/importlib_metadata) legitimately need ignores
-# that look unused on newer interpreters.
-warn_unused_ignores = false
+strict = true
 ignore_missing_imports = true
+warn_unused_ignores = true
 no_implicit_optional = true
+exclude = "(^|/)(tests|build|dist|.leakproof-corpus|ml_leakproof/examples)/"

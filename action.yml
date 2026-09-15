@@ -1,23 +1,23 @@
-name: "leakproof"
-description: "Run leakproof and emit SARIF for GitHub code scanning."
+name: "Leakproof"
+description: "Run ml-leakproof and emit SARIF for GitHub code scanning."
 branding:
   icon: "shield"
   color: "purple"
 inputs:
   paths:
-    description: "Paths to scan."
+    description: "Newline-separated files or directories to scan."
     required: false
     default: "."
   select:
-    description: "Rule globs to run (space-separated)."
+    description: "Space-separated rule selectors."
     required: false
     default: ""
   fail-on:
-    description: "Severity gate (critical|high|medium|low)."
+    description: "Severity gate (critical|high|medium|low|info)."
     required: false
     default: "high"
   layers:
-    description: "Comma list of layers: static,data,runtime."
+    description: "Layer list; check accepts static only."
     required: false
     default: "static"
   output:
@@ -27,14 +27,32 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - shell: bash
-      run: pip install "leakproof @ git+https://github.com/leakproof/leakproof@v0.1.0"
-    - shell: bash
+    - name: Install checked-out Leakproof
+      shell: bash
+      run: python -m pip install "$GITHUB_ACTION_PATH"
+    - name: Scan
+      shell: bash
+      env:
+        LEAKPROOF_INPUT_PATHS: ${{ inputs.paths }}
+        LEAKPROOF_INPUT_SELECT: ${{ inputs.select }}
+        LEAKPROOF_INPUT_FAIL_ON: ${{ inputs.fail-on }}
+        LEAKPROOF_INPUT_LAYERS: ${{ inputs.layers }}
+        LEAKPROOF_INPUT_OUTPUT: ${{ inputs.output }}
       run: |
-        SELECT=""
-        if [ -n "${{ inputs.select }}" ]; then SELECT="--select ${{ inputs.select }}"; fi
-        leakproof check ${{ inputs.paths }} \
-          --layers "${{ inputs.layers }}" \
-          --fail-on "${{ inputs.fail-on }}" \
-          --format sarif --output "${{ inputs.output }}" \
-          $SELECT
+        set -u
+        path_args=()
+        while IFS= read -r path; do
+          [ -n "$path" ] && path_args+=("$path")
+        done <<< "$LEAKPROOF_INPUT_PATHS"
+        select_args=()
+        read -r -a selectors <<< "$LEAKPROOF_INPUT_SELECT"
+        for selector in "${selectors[@]}"; do
+          select_args+=(--select "$selector")
+        done
+        command=(ml-leakproof check "${path_args[@]}" "${select_args[@]}"
+          --layers "$LEAKPROOF_INPUT_LAYERS"
+          --fail-on "$LEAKPROOF_INPUT_FAIL_ON"
+          --format sarif --output "$LEAKPROOF_INPUT_OUTPUT")
+        status=0
+        "${command[@]}" || status=$?
+        exit "$status"

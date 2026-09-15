@@ -1,0 +1,6 @@
+{
+  "description": "Example corpus-audit manifest. Every repository must pin a full immutable commit SHA.",
+  "repos": [
+    {"name": "scikit-learn-videos", "url": "https://github.com/justmarkham/scikit-learn-videos", "commit": "8545c74961398def7724501648fd504dbf061b41", "domain": "tabular-notebooks"}
+  ]
+}

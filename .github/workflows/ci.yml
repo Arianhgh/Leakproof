@@ -1,29 +1,51 @@
 name: ci
-on: [push, pull_request]
+
+on:
+  push:
+  pull_request:
 
 jobs:
-  check:
+  test:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        python-version: ["3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install
+      - name: Install development stack
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev,data,runtime]"
-      - name: Lint (ruff)
-        run: ruff check leakproof
-      - name: Type-check (mypy strict)
-        run: mypy --strict leakproof || true  # advisory until annotations complete
-      - name: Package smoke
+          python -m pip install -e ".[dev,data,runtime]"
+      - name: Ruff
+        run: ruff check ml_leakproof
+      - name: Strict mypy
+        run: mypy --strict ml_leakproof
+      - name: Tests and coverage
         run: |
-          python -m compileall -q leakproof
-          python -c "import leakproof; from leakproof.cli import app; print('ok')"
+          coverage run --branch -m pytest -q
+          coverage report --include='ml_leakproof/core/config.py,ml_leakproof/core/aggregate.py,ml_leakproof/data/hashing.py,ml_leakproof/autofix.py,ml_leakproof/runtime/hooks.py' --fail-under=90
+      - name: Build distributions
+        run: python -m build
+      - name: Validate metadata
+        run: twine check dist/*
+
+  base-install:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install base package
+        run: python -m pip install .
+      - name: Base smoke test
+        run: |
+          python -m ml_leakproof version
+          ml-leakproof rules --format json
 
   sarif:
     runs-on: ubuntu-latest
@@ -32,12 +54,12 @@ jobs:
       security-events: write
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-      - run: pip install -e .
-      - name: Self-scan (dogfood)
-        run: leakproof check leakproof --format sarif --output leakproof.sarif --fail-on high || true
+      - run: python -m pip install .
+      - name: Self-scan
+        run: ml-leakproof check ml_leakproof --select ALL --fail-on critical --format sarif --output leakproof.sarif --allow-partial
       - uses: actions/upload-artifact@v4
         if: always()
         with:

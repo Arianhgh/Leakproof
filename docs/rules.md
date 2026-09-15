@@ -2,14 +2,21 @@
 
 30 rules. Severity is the default; override per-rule via config.
 
+Findings from heuristic or methodological-suggestion rules are marked
+`advisory_only` in reports and never affect a gate. Confidence is an evidence
+strength, not a calibrated probability. In particular, grouped/time hints
+(`C002`, `C003`, `S002`), model-selection/reporting suggestions (`C005`, `M003`,
+`T003`), determinism reminders (`R001`, `R002`), and look-ahead hints (`TM002`)
+remain review evidence even when a caller lowers the gate-confidence threshold.
+
 | ID | Name | Category | Severity | Layers |
 |----|------|----------|----------|--------|
 | C001 | preprocessing fit outside CV loop | cross_validation | high | static, runtime |
-| C002 | plain KFold on grouped data | cross_validation | high | static, data |
-| C003 | plain KFold on time series | cross_validation | high | static, data |
+| C002 | plain KFold on grouped data | cross_validation | high | static |
+| C003 | plain KFold on time series | cross_validation | high | static |
 | C004 | tuning on the test set | cross_validation | high | static, runtime |
 | C005 | model selection without nested CV | cross_validation | medium | static |
-| C006 | target/mean encoding without fold isolation | cross_validation | high | static, data |
+| C006 | target/mean encoding without fold isolation | cross_validation | high | static |
 | D001 | exact train/test row overlap | data_overlap | critical | data |
 | D002 | near-duplicate across splits | data_overlap | high | data |
 | D003 | group/entity in both splits | data_overlap | critical | data |
@@ -17,7 +24,7 @@
 | D006 | suspiciously high feature-target MI | target_leakage | medium | data |
 | D007 | duplicate rows inflating test | data_overlap | medium | data |
 | M001 | accuracy on imbalanced target | metric | medium | data |
-| M002 | decision threshold tuned on test | metric | medium | static, runtime |
+| M002 | decision threshold tuned on test | metric | medium | static |
 | M003 | no variance/CI across folds or seeds | metric | low | static |
 | M004 | metric computed on training data | metric | medium | static, runtime |
 | P001 | fit_transform on full X before split | preprocessing | high | static, runtime |
@@ -26,7 +33,7 @@
 | R001 | missing random_state/seed | determinism | low | static |
 | R002 | nondeterministic framework ops | determinism | low | static |
 | S001 | transformer fit on full data before split | split | high | static, runtime |
-| S002 | train_test_split(shuffle=True) on temporal data | temporal | medium | static, data |
+| S002 | train_test_split(shuffle=True) on temporal data | temporal | medium | static |
 | S003 | resampling/augmentation before split | split | high | static, runtime |
 | S004 | feature selection on full data before split | split | high | static, runtime |
 | T001 | test set evaluated multiple times | adaptivity | medium | runtime |
@@ -75,7 +82,7 @@ References: https://doi.org/10.1016/j.patter.2023.100804, https://scikit-learn.o
 
 ### D001 — exact train/test row overlap
 
-Identical rows in train and test mean the model is evaluated on examples it trained on; reported scores are invalid.
+Identical feature rows across declared splits are an observed overlap. Review the split policy and target semantics before concluding that a reported score is invalid.
 
 References: https://doi.org/10.1145/2382577.2382579
 
@@ -209,6 +216,6 @@ References: https://doi.org/10.1016/j.patter.2023.100804
 
 ### TM002 — look-ahead feature across split
 
-A negative shift pulls future values into the present row, and a rolling/expanding window computed before splitting can summarize rows that belong to the test period. Compute time features within each split's window only.
+A negative shift pulls future values into the present row, and a centered rolling window can summarize rows across a split boundary. Trailing, past-only windows and explicit future-target construction require separate review.
 
 References: https://doi.org/10.1016/j.patter.2023.100804

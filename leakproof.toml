@@ -1,6 +1,6 @@
-# Example leakproof configuration.
+# Example Leakproof configuration.
 # Place this at your repo root, or use a [tool.leakproof] table in pyproject.toml.
-# Resolution order: built-in defaults -> pyproject.toml -> leakproof.toml -> CLI flags.
+# Resolution order: built-ins -> profile defaults -> project files -> CLI flags.
 
 select = ["ALL"]                 # or explicit globs: ["P001", "C00*", "D*"]
 ignore = []
@@ -18,9 +18,17 @@ neardup_distance = 0.05
 imbalance_ratio = 0.9
 sample_cap = 200000
 target_leakage_score = 0.98
-mi_zscore = 3.0
+mi_floor = 0.2
+mi_dominance_ratio = 1.5
+hash_chunk_size = 50000
+max_examples = 10
+max_neardup_candidates = 100000
+max_neardup_pairs = 100000
+deterministic_sampling = false
+probe_cv_folds = 5
 
 [llm]
 enabled = false
-provider = "anthropic"           # anthropic | openai | ollama
-# model = "claude-opus-4-8"
+# Explicit provider and model are required when enabled.
+# provider = "anthropic"         # anthropic | openai | ollama
+# model = "claude-model-id"

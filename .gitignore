@@ -14,7 +14,6 @@ htmlcov/
 .ruff_cache/
 .claude/
 .leakproof-corpus/
-tests/
 leakproof.sarif
 corpus-report.json
 .DS_Store
