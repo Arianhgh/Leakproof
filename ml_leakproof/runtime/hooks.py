@@ -233,6 +233,11 @@ class HookManager:
             session = current_session()
             if session is None or _IN_HOOK_CALLBACK.get():
                 return original(*args, **kwargs)
+            # Estimator internals assemble labels and bookkeeping arrays
+            # (e.g. sklearn 1.7 accuracy_score -> union1d -> concatenate).
+            # Their public method already records input/output provenance.
+            if kind is EventKind.APPLY and session._hook_depth > 0:
+                return original(*args, **kwargs)
             split_random_state = (
                 _clone_random_state(kwargs.get("random_state"))
                 if kind is EventKind.SPLIT

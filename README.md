@@ -7,13 +7,22 @@ is `0.2.0rc1`; the distribution is `ml-leakproof`, the Python package is
 
 ## Install
 
+This candidate is **unpublished**. Install from this checkout (Python 3.10–3.14):
+
 ```bash
-pip install ml-leakproof                 # static analysis
-pip install "ml-leakproof[data]"         # pandas / NumPy / scikit-learn data checks
-pip install "ml-leakproof[runtime]"      # runtime provenance instrumentation
-pip install "ml-leakproof[llm]"          # optional explanation providers
-pip install "ml-leakproof[fix]"          # LibCST autofixes
+git clone https://github.com/Arianhgh/Leakproof.git
+cd Leakproof
+python -m venv .venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
+python -m pip install .                         # static analysis
+python -m pip install ".[data,runtime,fix]"      # dataset, runtime, and autofix features
+python -m pip install ".[llm]"                   # optional explanation providers
 ```
+
+The `data` extra includes CSV and Parquet support. Additional runtime framework
+hooks use `.[runtime,runtime-integrations]`. For an unpublished wheel, use
+`python -m pip install "./dist/ml_leakproof-0.2.0rc1-py3-none-any.whl[data,runtime,fix]"`.
+The similarly named `leakproof-ml` is a different project.
 
 The base install does not import or require pandas, scikit-learn, runtime
 integrations, or LLM SDKs. `python -m ml_leakproof` is equivalent to the
@@ -170,6 +179,7 @@ required for a normal scan.
 - [Rule and adapter plugins](docs/plugins.md)
 - [0.2 migration guide](docs/migration-0.2.md)
 - [Benchmark methodology](docs/benchmark.md)
+- [Local release validation](docs/releasing.md)
 - Immutable-commit [corpus manifest](corpus-manifest.json)
 
 Third-party plugins use the `ml_leakproof.rules` and

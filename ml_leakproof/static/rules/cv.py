@@ -201,6 +201,7 @@ class C001(StaticRule, RuntimeRule):
 
 @register
 class C002(StaticRule):
+    advisory_only = True
     id = "C002"
     name = "plain KFold on grouped data"
     category = Category.CV
@@ -240,7 +241,7 @@ class C002(StaticRule):
                 location=location_of(c.node, ctx),
                 confidence=0.5,
                 references=self.references,
-                advisory_only=True,
+                advisory_only=self.advisory_only,
                 fix=Fix(summary="Switch to GroupKFold and pass groups=.", autofixable=False),
                 evidence={"splitter": c.func_name},
             )
@@ -248,6 +249,7 @@ class C002(StaticRule):
 
 @register
 class C003(StaticRule):
+    advisory_only = True
     id = "C003"
     name = "plain KFold on time series"
     category = Category.CV
@@ -283,7 +285,7 @@ class C003(StaticRule):
                 location=location_of(c.node, ctx),
                 confidence=0.5,
                 references=self.references,
-                advisory_only=True,
+                advisory_only=self.advisory_only,
                 fix=Fix(summary="Replace with TimeSeriesSplit.", autofixable=False),
                 evidence={"splitter": c.func_name},
             )
@@ -345,6 +347,7 @@ class C004(StaticRule, RuntimeRule):
 
 @register
 class C005(StaticRule):
+    advisory_only = True
     id = "C005"
     name = "model selection without nested CV"
     category = Category.CV
@@ -410,7 +413,7 @@ class C005(StaticRule):
                 location=location_of(c.node, ctx),
                 confidence=0.45,
                 references=self.references,
-                advisory_only=True,
+                advisory_only=self.advisory_only,
                 fix=Fix(summary="Use nested CV: cross_val_score(search, X, y).", autofixable=False),
                 evidence={"search": c.func_name},
             )

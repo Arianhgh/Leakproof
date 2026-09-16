@@ -127,6 +127,7 @@ def build(
                         "rules": _reporting_descriptors({f.rule_id for f in findings}),
                     }
                 },
+                "columnKind": "unicodeCodePoints",
                 "results": results,
             }
         ],
@@ -153,19 +154,15 @@ def _relative_path(path: Path, root: Path) -> str:
 
 
 def _common_root(findings: list[Finding]) -> Path:
-    files = [str(f.location.file.resolve()) for f in findings if f.location.file is not None]
+    files = [str(f.location.file.resolve().parent) for f in findings if f.location.file is not None]
     if not files:
         return Path.cwd()
-    return Path(os.path.commonpath(files)).parent if len(files) == 1 else Path(os.path.commonpath(files))
+    return Path(os.path.commonpath(files))
 
 
 def _unicode_column(snippet: str | None, column: int) -> int:
-    if snippet is None or column <= 1:
-        return max(1, column)
-    prefix = snippet[: column - 1]
-    # SARIF columns are Unicode code-point columns.  Python source offsets are
-    # already code-point based; this explicit conversion documents the contract.
-    return len(prefix) + 1
+    # Locations already use code points; snippets may be stripped or truncated.
+    return max(1, column)
 
 
 def _fingerprint(finding: Finding, root: Path) -> str:
@@ -180,7 +177,7 @@ def _fingerprint(finding: Finding, root: Path) -> str:
             finding.location.cell_line or finding.location.line or 0,
             finding.location.col or 0,
             finding.location.context_label or "",
-            finding.key,
+            (finding.key[:2], file, finding.key[3:]),
         )
     )
     return hashlib.blake2b(raw.encode("utf-8"), digest_size=16).hexdigest()

@@ -184,6 +184,7 @@ class S004(_FullFitRule):
 
 @register
 class S002(StaticRule):
+    advisory_only = True
     id = "S002"
     name = "train_test_split(shuffle=True) on temporal data"
     category = Category.TEMPORAL
@@ -226,7 +227,7 @@ class S002(StaticRule):
                 location=location_of(split.node, ctx),
                 confidence=0.6,
                 references=self.references,
-                advisory_only=True,
+                advisory_only=self.advisory_only,
                 fix=Fix(summary="Add shuffle=False or switch to TimeSeriesSplit.", autofixable=False),
                 evidence={"func": split.func_name},
             )

@@ -16,6 +16,7 @@ from ._helpers import location_of, notebook_note
 
 @register
 class TM002(StaticRule):
+    advisory_only = True
     id = "TM002"
     name = "look-ahead feature across split"
     category = Category.TEMPORAL
@@ -133,7 +134,7 @@ class TM002(StaticRule):
             location=location_of(node, ctx),
             confidence=0.55,
             references=self.references,
-            advisory_only=True,
+            advisory_only=self.advisory_only,
             fix=Fix(summary="Compute time-window features per split, never across the boundary.", autofixable=False),
             evidence={},
         )

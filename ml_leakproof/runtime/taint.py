@@ -97,7 +97,7 @@ def _tracked_array_type() -> type[Any] | None:
     except Exception:  # pragma: no cover
         return None
 
-    class TrackedArray(np.ndarray):
+    class TrackedArray(np.ndarray[Any, Any]):
         def __reduce_ex__(
             self, protocol: SupportsIndex
         ) -> tuple[Any, tuple[Any, ...]]:
@@ -171,31 +171,37 @@ def _tracked_array_type() -> type[Any] | None:
         def __array_ufunc__(
             self, ufunc: Any, method: str, *inputs: Any, **kwargs: Any
         ) -> Any:
-            if method != "__call__":
+            def untracked() -> Any:
                 base_inputs = tuple(
                     value.view(np.ndarray) if isinstance(value, np.ndarray) else value
                     for value in inputs
                 )
                 call_kwargs = dict(kwargs)
-                out_values = call_kwargs.get("out")
-                if out_values is not None:
-                    outputs = out_values if isinstance(out_values, tuple) else (out_values,)
+                supplied = call_kwargs.get("out")
+                outputs = supplied if isinstance(supplied, tuple) else (supplied,)
+                if supplied is not None:
                     call_kwargs["out"] = tuple(
                         value.view(np.ndarray) if isinstance(value, np.ndarray) else value
                         for value in outputs
                     )
-                return getattr(ufunc, method)(*base_inputs, **call_kwargs)
+                value = getattr(ufunc, method)(*base_inputs, **call_kwargs)
+                if supplied is None or method == "at":
+                    return value
+                values = value if isinstance(value, tuple) else (value,)
+                restored = tuple(v if out is None else out for v, out in zip(values, outputs))
+                return restored if isinstance(value, tuple) else restored[0]
+
+            if method != "__call__":
+                return untracked()
+            operation_completed = False
+            result: Any = None
             try:
                 from .hooks import current_session
 
                 session = current_session()
                 table = getattr(session, "taint", None)
                 if table is None:
-                    base_inputs = tuple(
-                        value.view(np.ndarray) if isinstance(value, np.ndarray) else value
-                        for value in inputs
-                    )
-                    return getattr(ufunc, method)(*base_inputs, **kwargs)
+                    return untracked()
                 arrays = [
                     value
                     for value in inputs
@@ -204,11 +210,7 @@ def _tracked_array_type() -> type[Any] | None:
                 ]
                 lineages = [table.lineage_for(value) for value in arrays]
                 if not any(lineage is not None for lineage in lineages):
-                    base_inputs = tuple(
-                        value.view(np.ndarray) if isinstance(value, np.ndarray) else value
-                        for value in inputs
-                    )
-                    return getattr(ufunc, method)(*base_inputs, **kwargs)
+                    return untracked()
 
                 # Run the operation on base arrays so ndarray's default
                 # ``__array_finalize__`` cannot silently choose the first
@@ -227,21 +229,39 @@ def _tracked_array_type() -> type[Any] | None:
                         for value in outputs
                     )
                 result = getattr(ufunc, method)(*base_inputs, **call_kwargs)
+                operation_completed = True
                 tracker = getattr(table, "track_numpy_operation", None)
                 if callable(tracker):
-                    tracked_result = tracker(arrays, result)
-                    if out_values is not None:
-                        # NumPy returns the supplied out object, not its base
-                        # view.  The table has already updated its lineage.
-                        return out_values[0] if isinstance(out_values, tuple) else out_values
-                    return tracked_result
+                    results = result if isinstance(result, tuple) else (result,)
+                    destinations = (
+                        out_values if isinstance(out_values, tuple) else (out_values,)
+                    ) if out_values is not None else (None,) * len(results)
+                    tracked_results = []
+                    for value, destination in zip(results, destinations):
+                        # Update the actual out object. Updating its temporary
+                        # ndarray view leaves stale metadata on the destination.
+                        target = value if destination is None else destination
+                        sources = arrays
+                        if destination is not None and kwargs.get("where", True) is not True:
+                            # Masked writes retain part of the old destination.
+                            sources = [*arrays, destination]
+                        tracked = tracker(sources, target)
+                        tracked_results.append(tracked if destination is None else destination)
+                    return tuple(tracked_results) if isinstance(result, tuple) else tracked_results[0]
                 return result
             except Exception:
-                base_inputs = tuple(
-                    value.view(np.ndarray) if isinstance(value, np.ndarray) else value
-                    for value in inputs
-                )
-                return getattr(ufunc, method)(*base_inputs, **kwargs)
+                if operation_completed:
+                    # Never perform an in-place numeric operation twice if
+                    # provenance bookkeeping fails after it has succeeded.
+                    if table is not None and out_values is not None:
+                        destinations = out_values if isinstance(out_values, tuple) else (out_values,)
+                        for destination in destinations:
+                            if destination is not None:
+                                table.mark_unsupported(destination, "NumPy output provenance could not be propagated")
+                        if not isinstance(result, tuple) and destinations[0] is not None:
+                            return destinations[0]
+                    return result
+                return untracked()
 
         def __getitem__(self, key: Any) -> Any:
             result = super().__getitem__(key)

@@ -99,6 +99,7 @@ class T002(StaticRule, RuntimeRule):
 
 @register
 class T003(StaticRule):
+    advisory_only = True
     id = "T003"
     name = "best-of-N seeds reported"
     category = Category.ADAPTIVITY
@@ -131,7 +132,7 @@ class T003(StaticRule):
                     location=location_of(node, ctx),
                     confidence=0.4,
                     references=self.references,
-                    advisory_only=True,
+                    advisory_only=self.advisory_only,
                     fix=Fix(summary="Collect all scores and report mean/std (and CI).", autofixable=False),
                     evidence={},
                 )

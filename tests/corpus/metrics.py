@@ -28,6 +28,7 @@ from tests._harness import (
     rule_id_of,
     run_fixture_result,
 )
+from tests.corpus.provenance import source_snapshot, verify_snapshot
 
 _ROOT = Path(__file__).resolve().parents[2]
 
@@ -187,6 +188,7 @@ def build_report(config: Config | None = None) -> dict[str, Any]:
         "tool": {"name": "ml-leakproof", "version": ml_leakproof.__version__},
         "source_commit": _git_commit(),
         "source_dirty": _git_dirty(),
+        "source_snapshot": source_snapshot(),
         "configuration": {
             "profile": cfg.profile,
             "fail_on": cfg.fail_on.value,
@@ -227,7 +229,12 @@ def _clean_rate(metrics: dict[str, RuleMetrics], *, gateable: bool) -> float:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--json", action="store_true", help="print the machine-readable benchmark")
+    parser.add_argument("--verify", type=Path, help="verify a report matches the current release inputs")
     args = parser.parse_args()
+    if args.verify:
+        verify_snapshot(json.loads(args.verify.read_text(encoding="utf-8")))
+        print("Benchmark source fingerprint verified")
+        raise SystemExit(0)
     if args.json:
         print(json.dumps(build_report(), indent=2, ensure_ascii=False, allow_nan=False))
     else:

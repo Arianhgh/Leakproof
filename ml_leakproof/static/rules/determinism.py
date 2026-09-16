@@ -17,6 +17,7 @@ _SEED_KWARGS = ("random_state", "seed", "random_seed")
 
 @register
 class R001(StaticRule):
+    advisory_only = True
     id = "R001"
     name = "missing random_state/seed"
     category = Category.DETERMINISM
@@ -63,7 +64,7 @@ class R001(StaticRule):
                 location=location_of(c.node, ctx),
                 confidence=0.7,
                 references=(),
-                advisory_only=True,
+                advisory_only=self.advisory_only,
                 fix=Fix(
                     summary=f"Add random_state=<int> to {c.func_name}.",
                     autofixable=True,
@@ -122,6 +123,7 @@ class R001(StaticRule):
 
 @register
 class R002(StaticRule):
+    advisory_only = True
     id = "R002"
     name = "nondeterministic framework ops"
     category = Category.DETERMINISM
@@ -181,7 +183,7 @@ class R002(StaticRule):
                 location=location_of(first_torch_call, ctx),
                 confidence=0.5,
                 references=(),
-                advisory_only=True,
+                advisory_only=self.advisory_only,
                 fix=Fix(
                     summary="Set torch.manual_seed and torch.use_deterministic_algorithms(True).",
                     autofixable=False,

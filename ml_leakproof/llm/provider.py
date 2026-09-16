@@ -63,7 +63,7 @@ class AnthropicProvider(LLMProvider):
             import anthropic
 
             client = anthropic.Anthropic(timeout=timeout_seconds)
-        self.client = client
+        self.client: Any = client
         self.model = model
 
     def _complete_once(self, system: str, prompt: str) -> str:
@@ -99,7 +99,7 @@ class OpenAIProvider(LLMProvider):
             import openai
 
             client = openai.OpenAI(timeout=timeout_seconds)
-        self.client = client
+        self.client: Any = client
         self.model = model
 
     def _complete_once(self, system: str, prompt: str) -> str:

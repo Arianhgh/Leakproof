@@ -2,7 +2,32 @@
 
 ## 0.2.0rc1 — release candidate
 
-Status: implemented in the working tree; not published and not tagged.
+Status: unpublished and untagged; local release validation is documented in
+`docs/releasing.md`.
+
+### Release hardening
+
+- Pin development tools and add a cross-version dependency lock; validate strict
+  typing and full-package branch coverage on Python 3.10–3.14.
+- Correct advisory metadata for all 13 advisory-only rules.
+- Isolate malformed notebook cells, report skipped magics as partial analysis,
+  preserve file-read failure coverage, and accept suppressions for unselected
+  rules that exist in the catalog.
+- Fix Unicode source columns and portable SARIF fingerprints and artifact paths.
+- Handle report write errors with exit code 2; corpus failures also return 2
+  after preserving their report.
+- Fix optional image/LLM backend typing, report unreadable image inputs as partial,
+  and include the Parquet backend with the data extra.
+- Ignore estimator-internal array bookkeeping in runtime lineage hooks, including
+  scikit-learn 1.7 score calculations. Preserve destination provenance for NumPy
+  `out=` writes and masked/multiple outputs; bookkeeping failures never repeat
+  a successful in-place numeric operation.
+- Expand regression tests and independently reviewed source scopes across five
+  pinned repositories; replace the obsolete M002 label with a reasoned negative.
+- Fingerprint benchmark source inputs and smoke-test base and extra installations
+  from both wheel and source archive without publishing.
+
+### Library features
 
 - Renamed the distribution and executable to `ml-leakproof` and the import
   package to `ml_leakproof`; retained `leakproof.toml` and `[tool.leakproof]`.

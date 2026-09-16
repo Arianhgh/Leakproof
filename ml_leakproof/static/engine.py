@@ -21,7 +21,7 @@ from ..core.models import (
     Layer,
     Location,
 )
-from ..core.registry import consume_diagnostics, load_all
+from ..core.registry import all_rules, consume_diagnostics, load_all
 from ..core.rule import StaticRule
 from ..core.suppression import FileSuppressions, path_excluded
 from .adapters import AdapterRegistry, consume_adapter_diagnostics, load_adapters
@@ -93,6 +93,7 @@ class StaticEngine:
             if isinstance(rule, StaticRule) and Layer.STATIC in rule.layers
         ]
         self._initial_diagnostics.extend(consume_diagnostics())
+        self._known_rule_ids = set(all_rules())
 
     def run_result(self, paths: list[Path], *, root: Path | None = None) -> AnalysisResult:
         normalized = [Path(path).expanduser() for path in paths]
@@ -163,14 +164,16 @@ class StaticEngine:
             file_result = self.run_file_result(file_path)
             result.findings.extend(file_result.findings)
             result.diagnostics.extend(file_result.diagnostics)
-            result.coverage.analyzed_inputs.append(str(file_path))
+            result.coverage.analyzed_inputs.extend(file_result.coverage.analyzed_inputs)
+            result.coverage.failed_inputs.extend(file_result.coverage.failed_inputs)
+            result.coverage.skipped_inputs.extend(file_result.coverage.skipped_inputs)
             result.coverage.executed_checks.extend(file_result.coverage.executed_checks)
             result.coverage.unavailable_checks.extend(file_result.coverage.unavailable_checks)
             result.coverage.notes.extend(file_result.coverage.notes)
             if file_result.completion is not CompletionStatus.COMPLETE:
                 result.completion = CompletionStatus.PARTIAL
 
-        if result.coverage.failed_inputs:
+        if result.coverage.failed_inputs and not result.coverage.analyzed_inputs:
             result.completion = CompletionStatus.FAILED
         elif result.diagnostics and result.completion is CompletionStatus.COMPLETE:
             # Diagnostics from a rule/parser/import failure are incomplete
@@ -210,6 +213,15 @@ class StaticEngine:
             result.coverage.notes.append(
                 "notebook stored cell order analyzed; execution history was not reconstructed"
             )
+            for cell_index in notebook_metadata.get("non_python_cells", []):
+                result.completion = CompletionStatus.PARTIAL
+                result.diagnostics.append(Diagnostic(
+                    code="LP008",
+                    message=f"notebook cell {cell_index} contains magic or shell code that was not analyzed",
+                    level=DiagnosticLevel.WARNING,
+                    layer=Layer.STATIC,
+                    location=Location(file=path, cell_index=cell_index),
+                ))
             for malformed in notebook_metadata.get("malformed_cells", []):
                 result.completion = CompletionStatus.PARTIAL
                 result.diagnostics.append(
@@ -254,9 +266,11 @@ class StaticEngine:
         source_lines = source.splitlines()
         suppressions = FileSuppressions.parse(
             source,
-            known_rule_ids={rule.id for rule in self.rules},
+            known_rule_ids=self._known_rule_ids,
         )
         result.diagnostics.extend(suppressions.diagnostics(path))
+        if result.diagnostics:
+            result.completion = CompletionStatus.PARTIAL
         if suppressions.ignore_file:
             result.coverage.notes.append("file suppressed by an ignore-file directive")
             return result

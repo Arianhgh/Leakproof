@@ -63,6 +63,12 @@ is invalid, none of that batch is loaded. Rule IDs must contain a vendor prefix
 such as `myorg-`; invalid plugin loads are reported as operational diagnostics,
 not hidden.
 
+Set `advisory_only = True` on a rule that emits only advisory findings, and pass
+`advisory_only=self.advisory_only` when constructing each finding. The catalog
+reports this rule-level contract; individual findings still carry their own
+advisory status. A rule with mixed evidence strength should leave the class
+attribute false and mark its advisory findings individually.
+
 `StaticRule.check(ctx)` receives the AST, source lines, scope-aware dataflow,
 and adapters. `DataRule.check(ctx)` receives a validated `DataContext`.
 `RuntimeRule.on_event(event, ctx)` receives runtime events from an isolated

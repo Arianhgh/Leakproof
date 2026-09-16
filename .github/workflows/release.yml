@@ -12,6 +12,10 @@ on:
 permissions:
   contents: read
 
+env:
+  OMP_NUM_THREADS: "1"
+  OPENBLAS_NUM_THREADS: "1"
+
 jobs:
   validate:
     runs-on: ubuntu-latest
@@ -20,23 +24,38 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-      - name: Install release tooling
-        run: python -m pip install -e ".[dev,data,runtime]"
-      - name: Verify version and checks
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.12.15"
+      - name: Install locked release stack
+        run: uv sync --locked --extra dev --extra data --extra runtime --extra llm
+      - name: Verify version, lint, and types
         run: |
-          test "$(python -m ml_leakproof version)" = "0.2.0rc1"
-          ruff check ml_leakproof
-          mypy --strict ml_leakproof
-          coverage run --branch -m pytest -q
-          coverage report --include='ml_leakproof/core/config.py,ml_leakproof/core/aggregate.py,ml_leakproof/data/hashing.py,ml_leakproof/autofix.py,ml_leakproof/runtime/hooks.py' --fail-under=90
-      - name: Build distributions
-        run: python -m build
-      - name: Validate distribution metadata
-        run: twine check dist/*
+          test "$(uv run --no-sync python -m ml_leakproof version)" = "0.2.0rc1"
+          uv run --no-sync ruff check ml_leakproof tests/corpus scripts
+          uv run --no-sync mypy --strict ml_leakproof
+      - name: Tests and full-package branch coverage
+        run: |
+          uv run --no-sync coverage run -m pytest -q
+          uv run --no-sync coverage report
+      - name: Verify fixture benchmark
+        run: |
+          uv run --no-sync python -m tests.corpus.metrics --json > benchmark-results.json
+          uv run --no-sync python -m tests.corpus.metrics --verify benchmark-results.json
+      - name: Verify reviewed corpus at pinned upstream commits
+        run: uv run --no-sync python -m tests.corpus.labeled
+      - name: Build and validate distributions
+        run: |
+          uv run --no-sync python -m build
+          uv run --no-sync twine check --strict dist/*.whl dist/*.tar.gz
+          uv run --no-sync python scripts/smoke_distribution.py dist/*.whl
+          uv run --no-sync python scripts/smoke_distribution.py dist/*.tar.gz
       - uses: actions/upload-artifact@v4
         with:
           name: ml-leakproof-0.2.0rc1
-          path: dist/*
+          path: |
+            dist/*.whl
+            dist/*.tar.gz
 
   publish:
     needs: validate

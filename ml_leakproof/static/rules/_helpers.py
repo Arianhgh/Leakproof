@@ -16,6 +16,12 @@ def location_of(node: ast.AST, ctx: StaticContext, *, label_suffix: str = "") ->
     col = getattr(node, "col_offset", None)
     end_line = getattr(node, "end_lineno", None)
     end_col = getattr(node, "end_col_offset", None)
+    # AST offsets count UTF-8 bytes, whereas public locations count Unicode
+    # code points. Convert against the original, unstripped source lines.
+    if line is not None and col is not None:
+        col = len(ctx.source_lines[line - 1].encode("utf-8")[:col].decode("utf-8"))
+    if end_line is not None and end_col is not None:
+        end_col = len(ctx.source_lines[end_line - 1].encode("utf-8")[:end_col].decode("utf-8"))
     label = None
     if ctx.is_notebook and line is not None and ctx.line_map:
         cell = ctx.line_map.get(line)

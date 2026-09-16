@@ -1,15 +1,205 @@
 {
-  "schema_version": "2.0",
-  "description": "Pinned, labeled repositories for a separate corpus benchmark.",
+  "description": "Reviewed, rule-specific source scopes from five pinned public repositories; not exhaustive repository ground truth. Cell indices are zero-based.",
   "repos": [
     {
       "name": "scikit-learn-videos",
       "url": "https://github.com/justmarkham/scikit-learn-videos",
       "commit": "8545c74961398def7724501648fd504dbf061b41",
-      "domain": "tabular-notebooks",
-      "expected_rule_ids": ["C005", "M002", "M003", "R001"],
-      "expected_false_positives": ["C001", "S002"],
-      "rationale": "Teaching notebooks have exploratory cells; only connected evaluation paths should gate."
+      "domain": "tabular",
+      "cases": [
+        {
+          "id": "videos-mean-without-spread",
+          "path": "07_cross_validation.ipynb",
+          "cells": [
+            22,
+            23,
+            24
+          ],
+          "select": [
+            "M003"
+          ],
+          "expected": [
+            "M003"
+          ],
+          "rationale": "Cross-validation scores are summarized by mean without a standard deviation or interval in this scope."
+        },
+        {
+          "id": "videos-search-score",
+          "path": "08_grid_search.ipynb",
+          "cells": [
+            15,
+            18,
+            20,
+            25
+          ],
+          "select": [
+            "C005"
+          ],
+          "expected": [
+            "C005"
+          ],
+          "rationale": "The fitted search reports best_score_ with no outer CV or held-out score in this scope."
+        },
+        {
+          "id": "videos-fixed-thresholds",
+          "path": "09_classification_metrics.ipynb",
+          "cells": [
+            65,
+            67,
+            68,
+            69
+          ],
+          "select": [
+            "M002"
+          ],
+          "expected": [],
+          "rationale": "The ROC curve is plotted and fixed thresholds 0.5 and 0.3 are inspected. No threshold is selected from curve metrics. This replaces the obsolete M002-positive label; it does not certify the wider experiment."
+        }
+      ],
+      "expected_rule_ids": [
+        "C005",
+        "M003",
+        "R001"
+      ],
+      "rationale": "Repository-level observations retained for compatibility. Accuracy labels are the independently reviewed scopes in cases; M002 is a scoped negative."
+    },
+    {
+      "name": "pycon-2016-tutorial",
+      "url": "https://github.com/justmarkham/pycon-2016-tutorial",
+      "commit": "5339710562cc46c4a32a369d63f1e8751a18a54e",
+      "domain": "nlp",
+      "cases": [
+        {
+          "id": "nlp-training-vocabulary",
+          "path": "tutorial.ipynb",
+          "cells": [
+            18,
+            42,
+            43,
+            45,
+            46,
+            47
+          ],
+          "select": [
+            "P001",
+            "C001",
+            "R001"
+          ],
+          "expected": [],
+          "rationale": "The vectorizer is fitted after a seeded split, using only training text; no CV reuses a globally learned vocabulary."
+        }
+      ]
+    },
+    {
+      "name": "intro-to-ml-sklearn",
+      "url": "https://github.com/amueller/introduction_to_ml_with_python",
+      "commit": "ea60cf6cf791553b6cca7cf31802c68cb3798ebb",
+      "domain": "tabular",
+      "cases": [
+        {
+          "id": "book-fit-before-search",
+          "path": "06-algorithm-chains-and-pipelines.ipynb",
+          "cells": [
+            2,
+            3,
+            5
+          ],
+          "select": [
+            "C001"
+          ],
+          "expected": [
+            "C001"
+          ],
+          "rationale": "The scaler is fitted once before GridSearchCV and its transformed training array is reused across folds."
+        },
+        {
+          "id": "book-pipeline-search",
+          "path": "06-algorithm-chains-and-pipelines.ipynb",
+          "cells": [
+            2,
+            8,
+            12,
+            13
+          ],
+          "select": [
+            "C001",
+            "P001"
+          ],
+          "expected": [],
+          "rationale": "GridSearchCV receives the pipeline, so learned scaling is refit within each fold."
+        },
+        {
+          "id": "book-selected-features-before-cv",
+          "path": "06-algorithm-chains-and-pipelines.ipynb",
+          "cells": [
+            15,
+            16,
+            17
+          ],
+          "select": [
+            "C001"
+          ],
+          "expected": [
+            "C001"
+          ],
+          "rationale": "Supervised feature selection is fitted to all X and y before the selected features enter cross-validation."
+        },
+        {
+          "id": "book-default-threshold-marker",
+          "path": "05-model-evaluation-and-improvement.ipynb",
+          "cells": [
+            84,
+            89
+          ],
+          "select": [
+            "M002"
+          ],
+          "expected": [],
+          "rationale": "argmin chooses the threshold nearest a fixed zero, not a threshold optimizing test metrics."
+        }
+      ]
+    },
+    {
+      "name": "ml-with-python",
+      "url": "https://github.com/susanli2016/Machine-Learning-with-Python",
+      "commit": "87cbe5caa5ce6c219ad92bb0c720f06aaf9c8773",
+      "domain": "mixed",
+      "cases": [
+        {
+          "id": "mushrooms-pca-before-split",
+          "path": "Classifier Visualization.ipynb",
+          "cells": [
+            0
+          ],
+          "line_start": 2,
+          "select": [
+            "P001"
+          ],
+          "expected": [
+            "P001"
+          ],
+          "rationale": "PCA is fitted to X before the transformed array enters train_test_split. The first line is only the notebook plotting magic and is outside this review scope."
+        }
+      ]
+    },
+    {
+      "name": "ds-from-scratch",
+      "url": "https://github.com/joelgrus/data-science-from-scratch",
+      "commit": "d5d0f117f41b3ccab3b07f1ee1fa21cfcf69afa1",
+      "domain": "tabular",
+      "cases": [
+        {
+          "id": "custom-splitter-definition",
+          "path": "scratch/machine_learning.py",
+          "select": [
+            "R001",
+            "P001"
+          ],
+          "expected": [],
+          "rationale": "The module implements its own local splitting functions. It does not call an imported sklearn splitter or fit learned preprocessing before a split."
+        }
+      ]
     }
-  ]
+  ],
+  "schema_version": "2.0"
 }

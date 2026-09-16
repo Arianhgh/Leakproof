@@ -1,52 +1,41 @@
 # Leakproof corpus audit
 
-This is the Markdown companion to [corpus-report.json](corpus-report.json),
-generated with the immutable pins in [corpus-manifest.json](corpus-manifest.json)
-using report schema `2.0`.
+Companion to `corpus-report.json`, using the immutable commits in `corpus-manifest.json`.
 
-Three repositories completed analysis, two repositories were partial, and none
-failed to clone or failed at the analysis level. The observed gateable-finding
-rate was **33.3% (1/3)** under the CI severity/confidence gate. Partial scans
-remain visible below but are excluded from this denominator. The manifest
-contains no expected labels, so this run is an operational corpus statistic
-rather than a labeled precision/recall benchmark.
+This source-only run analyzed 5 repositories: 0 complete, 5 partial, and 0 failed. All five contain skipped notebook magic/shell code or legacy Python parse failures. Partial scans are excluded from the complete-analysis denominator, so the gateable-repository rate is undefined. No repository was executed.
 
-Environment: pandas 3.0.3, NumPy 2.4.4, scikit-learn 1.9.0, SciPy 1.17.1,
-nbformat 5.10.4. Configuration: profile `ci`, `fail_on = high`, gate confidence
-`0.75`. Manifest SHA-256:
-`ea181a84f43578d05d4ae1921b6f5b96708876c88af0ef5650723d8112bf6d56`.
+This operational scan is separate from the ten reviewed source scopes in `corpus-labeled.json`; those labeled checks cover five repositories and pass independently. Full-repository findings are not exhaustively labeled accuracy evidence.
+
+## Environment
+
+pandas 3.0.5, numpy 2.5.3, sklearn 1.9.1, scipy 1.18.1, nbformat 5.11.1.
+
+Profile: `ci`; manifest SHA-256: `ea181a84f43578d05d4ae1921b6f5b96708876c88af0ef5650723d8112bf6d56`.
+
+## Per repository
+
+| Repository | Commit | Completion | Findings | Diagnostics |
+|---|---|---|---:|---:|
+| scikit-learn-videos | `8545c74961398def7724501648fd504dbf061b41` | partial | 10 | 5 |
+| pycon-2016-tutorial | `5339710562cc46c4a32a369d63f1e8751a18a54e` | partial | 0 | 4 |
+| intro-to-ml-sklearn | `ea60cf6cf791553b6cca7cf31802c68cb3798ebb` | partial | 55 | 11 |
+| ml-with-python | `87cbe5caa5ce6c219ad92bb0c720f06aaf9c8773` | partial | 194 | 94 |
+| ds-from-scratch | `d5d0f117f41b3ccab3b07f1ee1fa21cfcf69afa1` | partial | 2 | 23 |
 
 ## Findings by rule
 
 | Rule | Count |
 |---|---:|
-| M004 | 113 |
-| R001 | 84 |
-| S002 | 44 |
-| C002 | 31 |
-| C001 | 21 |
-| M002 | 18 |
-| P001 | 11 |
+| M004 | 124 |
+| R001 | 88 |
+| P001 | 12 |
 | M003 | 9 |
-| C005 | 6 |
+| C001 | 8 |
 | T002 | 6 |
 | C006 | 5 |
-| C003 | 5 |
-| S001 | 3 |
-| S004 | 2 |
+| S002 | 4 |
+| C005 | 2 |
+| S001 | 2 |
 | P002 | 1 |
 
-## Per repository
-
-| Repository | Domain | Resolved commit | Completion | Findings | Gateable? |
-|---|---|---|---|---:|---|
-| scikit-learn-videos | tabular | `8545c74961398def7724501648fd504dbf061b41` | complete | 11 | no |
-| pycon-2016-tutorial | nlp | `5339710562cc46c4a32a369d63f1e8751a18a54e` | complete | 7 | no |
-| intro-to-ml-sklearn | tabular | `ea60cf6cf791553b6cca7cf31802c68cb3798ebb` | complete | 97 | yes |
-| ml-with-python | mixed | `87cbe5caa5ce6c219ad92bb0c720f06aaf9c8773` | partial | 240 | n/a |
-| ds-from-scratch | tabular | `d5d0f117f41b3ccab3b07f1ee1fa21cfcf69afa1` | partial | 2 | n/a |
-
-Similarity, target-predictivity, MI, and other advisory probes are not included
-in the gateable rate. Partial repository analysis remains visible in the JSON
-report and is not equivalent to a complete clean result. The machine-readable
-report records `n_analyzed = 3`, `n_partial = 2`, and `n_failed = 0`.
+Diagnostics and skipped cells are recorded in the JSON report. Advisory findings never fail the severity gate. The corpus command returns exit code `2` for these partial repository scans, while retaining their full report.

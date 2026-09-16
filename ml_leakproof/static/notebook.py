@@ -44,7 +44,7 @@ def notebook_to_source(
         if normalized[1]:
             metadata["non_python_cells"].append(cell_index)
         cell_lines = normalized[0]
-        if cell_lines and not normalized[1]:
+        if cell_lines:
             try:
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore", SyntaxWarning)
@@ -53,7 +53,7 @@ def notebook_to_source(
                 metadata["malformed_cells"].append(
                     {"cell_index": cell_index, "cell_id": cell_id, "message": exc.msg, "line": exc.lineno}
                 )
-                cell_lines = [_pass_line(line) for line in cell_lines]
+                cell_lines = _skip_cell(cell_lines)
         for cell_line_no, text in enumerate(cell_lines, start=1):
             out_line += 1
             line_map[out_line] = (cell_index, cell_line_no, cell_id)
@@ -70,7 +70,7 @@ def _normalize_cell(lines: list[str]) -> tuple[list[str], bool]:
         return [], False
     first_code = next((index for index, line in enumerate(lines) if line.strip()), None)
     if first_code is not None and lines[first_code].lstrip().startswith("%%"):
-        return [_pass_line(line) for line in lines], True
+        return _skip_cell(lines), True
     normalized: list[str] = []
     saw_magic = False
     for line in lines:
@@ -86,3 +86,9 @@ def _normalize_cell(lines: list[str]) -> tuple[list[str], bool]:
 def _pass_line(line: str) -> str:
     prefix = line[: len(line) - len(line.lstrip())]
     return f"{prefix}pass  # leakproof: notebook-magic"
+
+
+def _skip_cell(lines: list[str]) -> list[str]:
+    # A removed cell cannot retain indentation from a now-removed block.
+    # Preserve its line count so later notebook locations remain stable.
+    return ["pass  # leakproof: notebook-magic" if i == 0 else "" for i in range(len(lines))]

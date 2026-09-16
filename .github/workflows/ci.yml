@@ -3,6 +3,14 @@ name: ci
 on:
   push:
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  OMP_NUM_THREADS: "1"
+  OPENBLAS_NUM_THREADS: "1"
 
 jobs:
   test:
@@ -16,42 +24,74 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install development stack
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e ".[dev,data,runtime]"
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.12.15"
+      - name: Install locked development stack
+        run: uv sync --locked --extra dev --extra data --extra runtime --extra llm
       - name: Ruff
-        run: ruff check ml_leakproof
+        run: uv run --no-sync ruff check ml_leakproof tests/corpus scripts
       - name: Strict mypy
-        run: mypy --strict ml_leakproof
-      - name: Tests and coverage
+        run: uv run --no-sync mypy --strict ml_leakproof
+      - name: Tests and full-package branch coverage
         run: |
-          coverage run --branch -m pytest -q
-          coverage report --include='ml_leakproof/core/config.py,ml_leakproof/core/aggregate.py,ml_leakproof/data/hashing.py,ml_leakproof/autofix.py,ml_leakproof/runtime/hooks.py' --fail-under=90
-      - name: Build distributions
-        run: python -m build
-      - name: Validate metadata
-        run: twine check dist/*
+          uv run --no-sync coverage run -m pytest -q
+          uv run --no-sync coverage report
+          uv run --no-sync coverage xml -o coverage.xml
+      - name: Fresh fixture benchmark
+        run: |
+          uv run --no-sync python -m tests.corpus.metrics --json > benchmark-results.json
+          uv run --no-sync python -m tests.corpus.metrics --verify benchmark-results.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: validation-python-${{ matrix.python-version }}
+          path: |
+            coverage.xml
+            benchmark-results.json
 
-  base-install:
+  distributions:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-      - name: Install base package
-        run: python -m pip install .
-      - name: Base smoke test
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.12.15"
+      - run: uv sync --locked --extra dev --extra data --extra runtime --extra llm
+      - name: Build and validate distributions
         run: |
-          python -m ml_leakproof version
-          ml-leakproof rules --format json
+          uv run --no-sync python -m build
+          uv run --no-sync twine check --strict dist/*.whl dist/*.tar.gz
+          uv run --no-sync python scripts/smoke_distribution.py dist/*.whl
+          uv run --no-sync python scripts/smoke_distribution.py dist/*.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: unpublished-distributions
+          path: dist/*
+
+  reviewed-corpus:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.12.15"
+      - run: uv sync --locked
+      - name: Check reviewed cases at pinned upstream commits
+        run: uv run --no-sync python -m tests.corpus.labeled
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: reviewed-corpus
+          path: corpus-labeled-results.json
 
   sarif:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      security-events: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v6

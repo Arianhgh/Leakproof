@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Iterable
+from types import ModuleType
 from typing import Any
 
 
@@ -201,8 +202,10 @@ def image_near_duplicates(
         from PIL import Image
     except Exception as exc:
         return NearDuplicatePairs(complete=False, unavailable=f"image backend unavailable: {exc}")
+    imagehash: ModuleType | None
     try:
-        import imagehash
+        import imagehash as imagehash_backend
+        imagehash = imagehash_backend
     except Exception:
         imagehash = None
 
@@ -263,7 +266,7 @@ def image_near_duplicates(
             pairs.append((best[0], test_index, float(best[1])))
     return NearDuplicatePairs(
         pairs,
-        complete=not (train_limited or test_limited),
+        complete=not (train_limited or test_limited or unreadable),
         sampled=train_limited or test_limited,
         candidates_checked=comparisons,
         comparisons=comparisons,

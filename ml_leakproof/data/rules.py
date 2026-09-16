@@ -284,6 +284,7 @@ class D007(DataRule):
 
 @register
 class D002(DataRule):
+    advisory_only = True
     id = "D002"
     name = "near-duplicate rows across splits"
     category = Category.DATA_OVERLAP
@@ -447,7 +448,7 @@ class D002(DataRule):
                     location=_loc(f"{left_name}/{right_name} near-duplicate overlap ({label})"),
                     confidence=0.75,
                     references=self.references,
-                    advisory_only=True,
+                    advisory_only=self.advisory_only,
                     fix=Fix(summary="Review similar rows and the split policy.", autofixable=False),
                     evidence={
                         "split_pair": [left_name, right_name],
@@ -559,6 +560,7 @@ def _numeric_matrix(frame: Any, columns: list[str]) -> Any:
 
 @register
 class D005(DataRule):
+    advisory_only = True
     id = "D005"
     name = "single feature strongly predicts target"
     category = Category.TARGET_LEAKAGE
@@ -602,7 +604,7 @@ class D005(DataRule):
                 location=_loc(f"target predictivity: {column} (score={score:.3f})"),
                 confidence=0.7,
                 references=self.references,
-                advisory_only=True,
+                advisory_only=self.advisory_only,
                 fix=Fix(summary=f"Verify `{column}` is available at prediction time.", autofixable=False),
                 evidence={
                     "feature": column,
@@ -615,6 +617,7 @@ class D005(DataRule):
 
 @register
 class D006(DataRule):
+    advisory_only = True
     id = "D006"
     name = "suspiciously high feature-target mutual information"
     category = Category.TARGET_LEAKAGE
@@ -659,7 +662,7 @@ class D006(DataRule):
                 location=_loc(f"high MI: {column} (MI={score:.3f})"),
                 confidence=0.5,
                 references=self.references,
-                advisory_only=True,
+                advisory_only=self.advisory_only,
                 fix=Fix(summary=f"Audit `{column}` for target leakage.", autofixable=False),
                 evidence={
                     "feature": column,
@@ -728,6 +731,7 @@ class TM001(DataRule):
 
 @register
 class M001(DataRule):
+    advisory_only = True
     id = "M001"
     name = "accuracy may be misleading for an imbalanced target"
     category = Category.METRIC
@@ -759,7 +763,7 @@ class M001(DataRule):
             location=_loc(f"class imbalance ({majority:.1%} majority)"),
             confidence=0.8,
             references=self.references,
-            advisory_only=True,
+            advisory_only=self.advisory_only,
             fix=Fix(summary="Choose a metric appropriate for the class distribution.", autofixable=False),
             evidence={"majority_fraction": majority, "n_classes": int(len(counts)), "metric_supplied": False},
         )

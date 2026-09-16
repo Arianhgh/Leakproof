@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ml-leakproof-example-plugin"
+version = "0.0.0"
+requires-python = ">=3.10"
+
+[project.entry-points."ml_leakproof.rules"]
+myorg = "myorg_leakproof:rules"
+
+[project.entry-points."ml_leakproof.adapters"]
+myorg = "myorg_leakproof:adapter"
+
+[tool.setuptools]
+py-modules = ["myorg_leakproof"]

@@ -161,7 +161,7 @@ class M002(StaticRule):
                     severity=self.severity,
                     layer=Layer.STATIC,
                     message=(
-                        f"`{tail}` is computed on the test/validation labels, suggesting the "
+                        f"`{tail}` is computed on the test labels, suggesting the "
                         f"decision threshold is tuned on test. Tune it on a validation split."
                         + notebook_note(ctx)
                     ),
@@ -210,6 +210,7 @@ class M002(StaticRule):
 
 @register
 class M003(StaticRule):
+    advisory_only = True
     id = "M003"
     name = "no variance/CI across folds or seeds"
     category = Category.METRIC
@@ -242,7 +243,7 @@ class M003(StaticRule):
             location=location_of(node, ctx),
             confidence=0.4,
             references=self.references,
-            advisory_only=True,
+            advisory_only=self.advisory_only,
             fix=Fix(summary="Report scores.std() alongside scores.mean().", autofixable=False),
             evidence={},
         )

@@ -64,6 +64,8 @@ def _validate_rule(rule: Rule, *, plugin: str | None = None) -> None:
         raise ValueError(f"rule {rule.id} must declare at least one layer")
     if not all(isinstance(layer, Layer) for layer in rule.layers):
         raise ValueError(f"rule {rule.id} has invalid layers")
+    if not isinstance(rule.advisory_only, bool):
+        raise ValueError(f"rule {rule.id} has invalid advisory_only metadata")
     for layer in rule.layers:
         if layer is Layer.STATIC and not hasattr(rule, "check"):
             raise ValueError(f"rule {rule.id} declares static but has no check method")

@@ -27,6 +27,8 @@ class Rule(ABC):
     layers: tuple[Layer, ...]
     references: tuple[str, ...] = ()
     enabled_by_default: bool = True
+    # True means every finding from this rule is advisory and must never gate.
+    advisory_only: bool = False
     # short rationale shown by `ml_leakproof explain`
     rationale: str = ""
 

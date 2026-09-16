@@ -163,7 +163,11 @@ def _finish(
     color: bool,
 ) -> None:
     result = _normalize_result(result, cfg)
-    _emit_reports(result, cfg, formats, output, root=root, color=color)
+    try:
+        _emit_reports(result, cfg, formats, output, root=root, color=color)
+    except (OSError, ValueError) as exc:
+        typer.secho(f"ml-leakproof report error: {exc}", fg="red", err=True)
+        raise typer.Exit(EXIT_ERROR) from exc
     if result.completion is CompletionStatus.FAILED:
         raise typer.Exit(EXIT_ERROR)
     if result.completion is not CompletionStatus.COMPLETE and not cfg.allow_partial:
@@ -463,7 +467,7 @@ def rules(
             "category": rule.category.value,
             "severity": rule.severity.value,
             "layers": [item.value for item in rule.layers],
-            "advisory_only": bool(getattr(rule, "advisory_only", False)),
+            "advisory_only": rule.advisory_only,
         }
         for rule in rule_values
     ]
@@ -474,7 +478,7 @@ def rules(
     from rich.table import Table
 
     table = Table(show_header=True, header_style="bold")
-    for column in ("ID", "Name", "Category", "Severity", "Layers"):
+    for column in ("ID", "Name", "Category", "Severity", "Layers", "Advisory"):
         table.add_column(column)
     for record in records:
         table.add_row(
@@ -483,6 +487,7 @@ def rules(
             str(record["category"]),
             str(record["severity"]),
             ",".join(str(value) for value in record["layers"]),
+            "yes" if record["advisory_only"] else "no",
         )
     Console().print(table)
 
@@ -559,6 +564,8 @@ def corpus(
         typer.secho(f"ml-leakproof corpus error: {exc}", fg="red", err=True)
         raise typer.Exit(EXIT_ERROR) from exc
     typer.echo(f"wrote corpus report to {output}", err=True)
+    if report["n_failed"] or report["n_partial"]:
+        raise typer.Exit(EXIT_ERROR)
 
 
 @app.command()
