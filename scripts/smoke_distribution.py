@@ -1,4 +1,4 @@
-"""Install an unpublished artifact in clean environments and test public entry points.
+"""Install a built artifact in clean environments and test public entry points.
 
 Run with the locked dev stack: python scripts/smoke_distribution.py dist/<artifact>.
 No commands in this script publish, tag, or upload distributions.
@@ -20,7 +20,7 @@ import importlib.util
 import json
 from pathlib import Path
 import ml_leakproof as lp
-assert lp.__version__ == "0.2.0rc1"
+assert lp.__version__ == "0.2.0rc2"
 for name in ("numpy", "pandas", "sklearn", "anthropic", "openai", "libcst"):
     assert importlib.util.find_spec(name) is None, name
 source = Path("leaky.py")
@@ -87,7 +87,7 @@ def main(artifact: Path) -> None:
             run([python, "-m", "pip", "install", requirement], root)
             run([python, "-m", "pip", "check"], root)
             run([python, "-c", EXTRAS_SMOKE if extras else BASE_SMOKE], root)
-            assert "0.2.0rc1" in run([python, "-m", "ml_leakproof", "version"], root)
+            assert "0.2.0rc2" in run([python, "-m", "ml_leakproof", "version"], root)
             records = json.loads(run([cli, "rules", "--format", "json"], root))
             assert len(records) == 30
             assert next(r for r in records if r["id"] == "M003")["advisory_only"]

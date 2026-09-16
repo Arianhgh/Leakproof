@@ -388,7 +388,7 @@ def _attach_analysis_metadata(finding: Finding, path: Path, *, notebook: bool) -
         pass
     fix = finding.fix
     if notebook and fix is not None and fix.autofixable:
-        # Notebook JSON rewriting is intentionally out of scope for 0.2.0rc1.
+        # Notebook JSON rewriting is intentionally out of scope for this release line.
         from ..core.models import Fix
 
         fix = Fix(

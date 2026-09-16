@@ -31,7 +31,7 @@ jobs:
         run: uv sync --locked --extra dev --extra data --extra runtime --extra llm
       - name: Verify version, lint, and types
         run: |
-          test "$(uv run --no-sync python -m ml_leakproof version)" = "0.2.0rc1"
+          test "$(uv run --no-sync python -m ml_leakproof version)" = "0.2.0rc2"
           uv run --no-sync ruff check ml_leakproof tests/corpus scripts
           uv run --no-sync mypy --strict ml_leakproof
       - name: Tests and full-package branch coverage
@@ -52,7 +52,7 @@ jobs:
           uv run --no-sync python scripts/smoke_distribution.py dist/*.tar.gz
       - uses: actions/upload-artifact@v4
         with:
-          name: ml-leakproof-0.2.0rc1
+          name: ml-leakproof-0.2.0rc2
           path: |
             dist/*.whl
             dist/*.tar.gz
@@ -67,7 +67,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: ml-leakproof-0.2.0rc1
+          name: ml-leakproof-0.2.0rc2
           path: dist
       - uses: pypa/gh-action-pypi-publish@release/v1
         with:

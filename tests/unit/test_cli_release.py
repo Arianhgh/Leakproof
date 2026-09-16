@@ -136,7 +136,7 @@ def test_csv_audit_reports_overlap_and_invalid_inputs(tmp_path):
 
 
 def test_version_and_fix_preview(tmp_path):
-    assert "0.2.0rc1" in runner.invoke(app, ["version"]).stdout
+    assert "0.2.0rc2" in runner.invoke(app, ["version"]).stdout
     path = tmp_path / "seed.py"
     source = "from sklearn.model_selection import train_test_split\na,b = train_test_split(X)\n"
     path.write_text(source)

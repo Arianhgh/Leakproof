@@ -1,10 +1,12 @@
 # Local release validation
 
-This is the unpublished `0.2.0rc1` candidate. The repository never publishes on
-push: `.github/workflows/release.yml` is manual, defaults to validation-only,
-and uploads to PyPI only when its protected `publish` input is explicitly enabled.
-The commands below build and validate local artifacts; they do not create a tag,
-release, or PyPI upload.
+This document records pre-publication validation for `0.2.0rc2`. Version
+`0.2.0rc1` was published, but its packaged README retained pre-publication install
+text and is superseded by this documentation-only release candidate. The repository
+never publishes on push: `.github/workflows/release.yml` is manual, defaults to
+validation-only, and uploads to PyPI only when its protected `publish` input is
+explicitly enabled. The commands below build and validate local artifacts; they do
+not create a tag, release, or PyPI upload.
 
 The latest local results are recorded in [`release-validation.json`](../release-validation.json),
 including interpreter versions, coverage, source fingerprints, and artifact hashes.
@@ -40,8 +42,8 @@ magics. Those gaps are reported and excluded from clean-analysis rates.
 ```bash
 uv run --no-sync python -m build
 uv run --no-sync twine check --strict dist/*.whl dist/*.tar.gz
-uv run --no-sync python scripts/smoke_distribution.py dist/ml_leakproof-0.2.0rc1-py3-none-any.whl
-uv run --no-sync python scripts/smoke_distribution.py dist/ml_leakproof-0.2.0rc1.tar.gz
+uv run --no-sync python scripts/smoke_distribution.py dist/ml_leakproof-0.2.0rc2-py3-none-any.whl
+uv run --no-sync python scripts/smoke_distribution.py dist/ml_leakproof-0.2.0rc2.tar.gz
 ```
 
 Each smoke check creates clean temporary environments outside the repository,

@@ -1,9 +1,21 @@
 # Changelog
 
+## 0.2.0rc2 — release candidate
+
+Status: release candidate correcting the public installation metadata from
+`0.2.0rc1`.
+
+### Documentation correction
+
+- Replace checkout-only, pre-publication installation text with exact PyPI
+  commands for the base package and optional extras.
+- Supersede `0.2.0rc1`, whose packaged README incorrectly described the
+  already-published candidate as unpublished. Library behavior is unchanged.
+
 ## 0.2.0rc1 — release candidate
 
-Status: unpublished and untagged; local release validation is documented in
-`docs/releasing.md`.
+Status: published to PyPI on 2026-09-15 and tagged `v0.2.0rc1`; superseded by
+`0.2.0rc2` because its packaged README retained pre-publication install text.
 
 ### Release hardening
 

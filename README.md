@@ -1,27 +1,24 @@
 # Leakproof
 
 Leakproof is a static, dataset, and runtime checker for data leakage and
-evaluation-rigor mistakes in machine-learning workflows. The release candidate
-is `0.2.0rc1`; the distribution is `ml-leakproof`, the Python package is
+evaluation-rigor mistakes in machine-learning workflows. The current release
+candidate is `0.2.0rc2`; the distribution is `ml-leakproof`, the Python package is
 `ml_leakproof`, and the executable is `ml-leakproof`.
 
 ## Install
 
-This candidate is **unpublished**. Install from this checkout (Python 3.10–3.14):
+Install the release candidate from PyPI (Python 3.10–3.14):
 
 ```bash
-git clone https://github.com/Arianhgh/Leakproof.git
-cd Leakproof
 python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
-python -m pip install .                         # static analysis
-python -m pip install ".[data,runtime,fix]"      # dataset, runtime, and autofix features
-python -m pip install ".[llm]"                   # optional explanation providers
+python -m pip install "ml-leakproof==0.2.0rc2"                    # static analysis
+python -m pip install "ml-leakproof[data,runtime,fix]==0.2.0rc2"  # data/runtime/autofix
+python -m pip install "ml-leakproof[llm]==0.2.0rc2"               # LLM providers
 ```
 
 The `data` extra includes CSV and Parquet support. Additional runtime framework
-hooks use `.[runtime,runtime-integrations]`. For an unpublished wheel, use
-`python -m pip install "./dist/ml_leakproof-0.2.0rc1-py3-none-any.whl[data,runtime,fix]"`.
+hooks use `ml-leakproof[runtime,runtime-integrations]`.
 The similarly named `leakproof-ml` is a different project.
 
 The base install does not import or require pandas, scikit-learn, runtime

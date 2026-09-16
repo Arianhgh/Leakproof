@@ -1,13 +1,13 @@
-# 0.2.0rc1 release checklist
+# 0.2.0rc2 release checklist
 
-This working tree is a release candidate only. It must not be published or
-tagged as part of the implementation task.
+This checklist records preparation of the documentation-corrected release
+candidate that supersedes `0.2.0rc1`.
 
 ## Preflight
 
 - [x] `ml_leakproof` is the only Python package in the wheel.
 - [x] `ml-leakproof` is the only console entry point.
-- [x] Version is `0.2.0rc1`.
+- [x] Version is `0.2.0rc2`.
 - [x] `leakproof.toml` and `[tool.leakproof]` remain supported.
 - [x] `ruff check ml_leakproof` passes.
 - [x] `mypy --strict ml_leakproof` passes.
