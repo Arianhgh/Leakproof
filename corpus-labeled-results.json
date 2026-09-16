@@ -2,23 +2,23 @@
   "schema_version": "1.0",
   "source_snapshot": {
     "algorithm": "sha256",
-    "digest": "bd8cf681f4dfa55511a81e35a91a0c61616ac886b4a9bef039cd983dcf975bd1",
+    "digest": "5844f1629850bb86e7aa225ed8c427656db687e129a67e0bf4d317bd8cabb8d6",
     "files": {
       ".github/workflows/ci.yml": "dbbd22b2685f2c489f73588a1632b45cd074dc680d8557db8d775a5f658c5019",
       ".github/workflows/release.yml": "dc5dafa998b90c9d835a16d9d60801a2e4aaae31d1d86174a03be9d311688e0e",
       ".pre-commit-hooks.yaml": "702c13a1b57484fa561165b3f519324aa32e925f670c7c7ef79a56551427a7e9",
-      "CHANGELOG.md": "e8ee984ca5e50e63a8067f7388de556d170487839d6b64921c6e16bbcaedb21b",
+      "CHANGELOG.md": "52baa747cf589af55dbedd2163ebb7477bf1465c7e7da7e25cd0d64ea96e771f",
       "LICENSE": "fd0429f70db1d4244867837320b63d150020005f98c1e4b0e943f47096e3136b",
       "README.md": "0d507a39df69f6c392962620d58ca524330ce9f480b493f5172a7137a77b2ec6",
       "action.yml": "3c9e9ca7f342251afe953565dee0223ca7fededbf0ef0b8f302cb275da6ff848",
-      "corpus-labeled.json": "02fe4ac597f76929b5be9e3c0ed9f629383886e978b2a655065b7cd3b88c1fa0",
-      "corpus-manifest.json": "ea181a84f43578d05d4ae1921b6f5b96708876c88af0ef5650723d8112bf6d56",
-      "docs/benchmark.md": "9dfe9b52ce061b384dbf59748dd9083dd85d455fda04ec6f9420d3617a82dd34",
+      "corpus-labeled.json": "61bd8a72e2c9f5df2910b735df50db08f6ec1714d100a13f11109bfecc7ffe0c",
+      "corpus-manifest.json": "3da99fe65ca6e52d531977df20c80f77b18fd09ffa7e41c1879be120a1efb642",
+      "docs/benchmark.md": "5ae470ee71382a866e666f8d125da321a55caf47e94fb4a04d88411d99f640fd",
       "docs/ci.md": "9c3a64c5ab1cd1da7a802db9df1d7577dde488268ae7a4e8dca2ffe3ad6fd6ff",
       "docs/migration-0.2.md": "255c2a95c1869f9cc834a826b13c2b2ccd1941785e229bf1d113282a922afc29",
       "docs/plugins.md": "40daffd3aa2bb0f06efe7973804322f427e34b34e50ed00c5c655a9f48617a63",
       "docs/release-checklist.md": "63eed622db4389ba90ce50b45dd4efcab4f0c5475f0d48849e455b4c019068f1",
-      "docs/releasing.md": "a2a67e8e73768a20a02b1b583d6e0ff6a71c01ae93a8ee3c310d7a086570431d",
+      "docs/releasing.md": "411c28f45fecd684230f53ea0a05ae6145a980a4609eb0dcd62fd81071de943b",
       "docs/rules.md": "4e75fb133477b2fa42dfdcf23ba06c2a11cc48a81d3a78c550076e8c0b7b18ac",
       "examples/README.md": "46827e389511a35c8563ec3c8e7515427a551bbf3999358caeaf30db390ce9ec",
       "examples/clean_workflow.py": "ff9aacf51e2df172c68d89608a411f920595009146ab7ae11d867156d3fad835",
@@ -148,7 +148,7 @@
       "ml_leakproof/static/rules/adaptivity.py": "1fcb78d50ff3124d8e1a4afff5b626452fa12c7ef8e144185a71926372fa7dad",
       "ml_leakproof/static/rules/cv.py": "80a0711e584769e9fb1ee1e313886d835347e9466ab4fedc3c70e65d66ea67f5",
       "ml_leakproof/static/rules/determinism.py": "514fb0a09694bed2408008b9b7f3196384b0188fba69c779ee8fe9fdc6f5475e",
-      "ml_leakproof/static/rules/metric.py": "ff0bed8ed2c6cd10c936af45ec2e227afa390561079c44717e7ed5614ef8cb88",
+      "ml_leakproof/static/rules/metric.py": "2f09c01dba708ff594fba0f33fcad6a5654e61117f0b0dfbbb01fb098476113f",
       "ml_leakproof/static/rules/preprocessing.py": "bdd8dfd5c6e313931cb50d5b86f574dc78f72f9e3dc8fdedb0a77dd0e1654a4d",
       "ml_leakproof/static/rules/split.py": "014500757f95a5f040be88aeb52e0e0e34ccf8a8d8b0cf6ff7689dde033791be",
       "ml_leakproof/static/rules/temporal.py": "90100790524a8e0d103ae333137618c5cddb2d10719902179bd13eed2921fe9c",
@@ -248,13 +248,13 @@
       "tests/unit/test_reports.py": "49284e88b0f7b066ea4179533801beb88ac9ec1e8ffa09751368ec56433302aa",
       "tests/unit/test_runtime.py": "285be385dc0d3df99fb2412eda0d56e3c34c590c74a39ecb2a63310eb225d33d",
       "tests/unit/test_runtime_lineage.py": "fe78185c41dc12c8b9b6f89079811644956213aeb388bc3d165515b0d9368d34",
-      "tests/unit/test_static_precision.py": "6376fe7aa1a0d89dec44eba8da125fbf220fe2900318e48c03061e3e5d305e83",
+      "tests/unit/test_static_precision.py": "0584e5f63cd404e238990e01d77b1e6b5106400a6a2332a6f2dcbd6d82dac188",
       "tests/unit/test_suppression.py": "6a345454f0a1a57a42148d79dce12ce2ca404698a03768ce99ee6765d24587f5",
       "uv.lock": "c4abfb02e6357b5accf2cac072650f8868e75ada6038eda192565cc78649e2a6"
     }
   },
-  "manifest_sha256": "02fe4ac597f76929b5be9e3c0ed9f629383886e978b2a655065b7cd3b88c1fa0",
-  "repositories": 5,
+  "manifest_sha256": "61bd8a72e2c9f5df2910b735df50db08f6ec1714d100a13f11109bfecc7ffe0c",
+  "repositories": 7,
   "cases": [
     {
       "id": "videos-mean-without-spread",
@@ -337,6 +337,60 @@
       "passed": true,
       "diagnostics": [],
       "rationale": "The ROC curve is plotted and fixed thresholds 0.5 and 0.3 are inspected. No threshold is selected from curve metrics. This replaces the obsolete M002-positive label; it does not certify the wider experiment."
+    },
+    {
+      "id": "videos-seeded-holdout",
+      "repository": "scikit-learn-videos",
+      "commit": "8545c74961398def7724501648fd504dbf061b41",
+      "path": "05_model_evaluation.ipynb",
+      "cells": [
+        23
+      ],
+      "line_start": null,
+      "source_sha256": "95ec328598597bc94f35c11d0be53af91179c5716fe3de18c5e622311a5aaeca",
+      "selected": [
+        "R001"
+      ],
+      "expected": [],
+      "observed": [],
+      "missing": [],
+      "unexpected": [],
+      "completion": "complete",
+      "passed": true,
+      "diagnostics": [],
+      "rationale": "The holdout split supplies an explicit random_state, so the missing-seed advisory must remain silent."
+    },
+    {
+      "id": "videos-pipeline-cv-mean-only",
+      "repository": "scikit-learn-videos",
+      "commit": "8545c74961398def7724501648fd504dbf061b41",
+      "path": "10_categorical_features.ipynb",
+      "cells": [
+        44,
+        45,
+        46,
+        47,
+        48
+      ],
+      "line_start": null,
+      "source_sha256": "e0b52168ea9ba30800d516ca5896b4e10d3c03a8ef2ce78ced2f7da580907782",
+      "selected": [
+        "C001",
+        "M003",
+        "R001"
+      ],
+      "expected": [
+        "M003"
+      ],
+      "observed": [
+        "M003"
+      ],
+      "missing": [],
+      "unexpected": [],
+      "completion": "complete",
+      "passed": true,
+      "diagnostics": [],
+      "rationale": "The column transformer is isolated inside the cross-validation pipeline and the estimator is deterministic for its configured solver, but the displayed CV summary is a mean with no spread."
     },
     {
       "id": "nlp-training-vocabulary",
@@ -473,6 +527,105 @@
       "rationale": "argmin chooses the threshold nearest a fixed zero, not a threshold optimizing test metrics."
     },
     {
+      "id": "book-training-only-scaling",
+      "repository": "intro-to-ml-sklearn",
+      "commit": "ea60cf6cf791553b6cca7cf31802c68cb3798ebb",
+      "path": "03-unsupervised-learning.ipynb",
+      "cells": [
+        4,
+        5,
+        6,
+        7,
+        8
+      ],
+      "line_start": null,
+      "source_sha256": "2a912400e8d476a88f258ed52fd1504d9840781b4fe6dc5be95e99570cfaffde",
+      "selected": [
+        "S001",
+        "P001",
+        "R001"
+      ],
+      "expected": [],
+      "observed": [],
+      "missing": [],
+      "unexpected": [],
+      "completion": "complete",
+      "passed": true,
+      "diagnostics": [],
+      "rationale": "The seeded holdout is created before MinMaxScaler is fit on X_train, and that fitted scaler is reused for X_test."
+    },
+    {
+      "id": "book-training-only-pca",
+      "repository": "intro-to-ml-sklearn",
+      "commit": "ea60cf6cf791553b6cca7cf31802c68cb3798ebb",
+      "path": "03-unsupervised-learning.ipynb",
+      "cells": [
+        31,
+        33
+      ],
+      "line_start": null,
+      "source_sha256": "3cd23e923df9beb2ee2737bab81a65e43a5ae856fdc01474684883e26c13ac4a",
+      "selected": [
+        "S001",
+        "P001",
+        "R001"
+      ],
+      "expected": [],
+      "observed": [],
+      "missing": [],
+      "unexpected": [],
+      "completion": "complete",
+      "passed": true,
+      "diagnostics": [],
+      "rationale": "The split and PCA are seeded, PCA is fit only on X_train, and the learned transform is then applied to both partitions."
+    },
+    {
+      "id": "book-search-with-holdout",
+      "repository": "intro-to-ml-sklearn",
+      "commit": "ea60cf6cf791553b6cca7cf31802c68cb3798ebb",
+      "path": "07-working-with-text-data.ipynb",
+      "cells": [
+        23,
+        24
+      ],
+      "line_start": null,
+      "source_sha256": "814c7af973935d50a469db83608bc69d98eea12233ac9ef7b2ff7cc0794a1355",
+      "selected": [
+        "C005"
+      ],
+      "expected": [],
+      "observed": [],
+      "missing": [],
+      "unexpected": [],
+      "completion": "complete",
+      "passed": true,
+      "diagnostics": [],
+      "rationale": "Although best_score_ is displayed, the selected search is also evaluated on an independently transformed held-out test set in the same scope."
+    },
+    {
+      "id": "book-train-and-test-diagnostic-scores",
+      "repository": "intro-to-ml-sklearn",
+      "commit": "ea60cf6cf791553b6cca7cf31802c68cb3798ebb",
+      "path": "02-supervised-learning.ipynb",
+      "cells": [
+        17,
+        81
+      ],
+      "line_start": null,
+      "source_sha256": "dcd9050bbb40e07d7a3812af734e8e22d92811216b2c289c36d98753084729e8",
+      "selected": [
+        "M004"
+      ],
+      "expected": [],
+      "observed": [],
+      "missing": [],
+      "unexpected": [],
+      "completion": "complete",
+      "passed": true,
+      "diagnostics": [],
+      "rationale": "Training accuracy is shown directly beside held-out accuracy to diagnose generalization; the training score is not presented as the evaluation result."
+    },
+    {
       "id": "mushrooms-pca-before-split",
       "repository": "ml-with-python",
       "commit": "87cbe5caa5ce6c219ad92bb0c720f06aaf9c8773",
@@ -518,6 +671,118 @@
       "passed": true,
       "diagnostics": [],
       "rationale": "The module implements its own local splitting functions. It does not call an imported sklearn splitter or fit learned preprocessing before a split."
+    },
+    {
+      "id": "encoders-pipeline-grid-search",
+      "repository": "category-encoders",
+      "commit": "fafdccced2c5154478a5f10cd761e138daa56d21",
+      "path": "examples/grid_search_example.py",
+      "cells": null,
+      "line_start": null,
+      "source_sha256": "6ac84ca12cc3982a6e60c2377bb83c1f3c5f17281196494dd56e4fa546604aac",
+      "selected": [
+        "C001",
+        "C005",
+        "M003",
+        "R001"
+      ],
+      "expected": [],
+      "observed": [],
+      "missing": [],
+      "unexpected": [],
+      "completion": "complete",
+      "passed": true,
+      "diagnostics": [],
+      "rationale": "Encoding and scaling are inside the GridSearchCV pipeline, the split and estimator are seeded, fold means are paired with standard deviations, and final predictions use the holdout set."
+    },
+    {
+      "id": "encoders-transform-before-cv",
+      "repository": "category-encoders",
+      "commit": "fafdccced2c5154478a5f10cd761e138daa56d21",
+      "path": "examples/encoding_examples.py",
+      "cells": null,
+      "line_start": null,
+      "source_sha256": "cc80d1bf985ab66dc041d8b1683acae0ab3531ef2221f35d9e1ae4ea97a8404c",
+      "selected": [
+        "C001"
+      ],
+      "expected": [
+        "C001"
+      ],
+      "observed": [
+        "C001"
+      ],
+      "missing": [],
+      "unexpected": [],
+      "completion": "complete",
+      "passed": true,
+      "diagnostics": [],
+      "rationale": "The encoder and StandardScaler are fit to all rows before their transformed output enters cross_validate; the source comment explicitly notes that normalization should be trained per fold."
+    },
+    {
+      "id": "encoders-no-evaluation-boundary",
+      "repository": "category-encoders",
+      "commit": "fafdccced2c5154478a5f10cd761e138daa56d21",
+      "path": "examples/column_transformer_example.py",
+      "cells": null,
+      "line_start": null,
+      "source_sha256": "849b29b1623719b14b7a71aeefde85ee9b2d0ea1f1f167f88e95d598db9a25da",
+      "selected": [
+        "C006",
+        "P001"
+      ],
+      "expected": [],
+      "observed": [],
+      "missing": [],
+      "unexpected": [],
+      "completion": "complete",
+      "passed": true,
+      "diagnostics": [],
+      "rationale": "This transformation-only example fits a TargetEncoder but defines no train/test or cross-validation boundary, so the scoped source does not support a leakage claim."
+    },
+    {
+      "id": "pytorch-mnist-seed-without-determinism",
+      "repository": "pytorch-examples",
+      "commit": "acc295dc7b90714f1bf47f06004fc19a7fe235c4",
+      "path": "mnist/main.py",
+      "cells": null,
+      "line_start": null,
+      "source_sha256": "4890da74b7f9917e76a18088a42ec344bfa250e3f49df6cba98b81a08e351b06",
+      "selected": [
+        "R002"
+      ],
+      "expected": [
+        "R002"
+      ],
+      "observed": [
+        "R002"
+      ],
+      "missing": [],
+      "unexpected": [],
+      "completion": "complete",
+      "passed": true,
+      "diagnostics": [],
+      "rationale": "The example sets torch.manual_seed but does not enable deterministic algorithms or a deterministic backend mode."
+    },
+    {
+      "id": "pytorch-imagenet-deterministic-mode",
+      "repository": "pytorch-examples",
+      "commit": "acc295dc7b90714f1bf47f06004fc19a7fe235c4",
+      "path": "imagenet/main.py",
+      "cells": null,
+      "line_start": null,
+      "source_sha256": "3ae2751faca7703168e1afe97283a44f7742ed7f04bdec34a3ee2f67774c3f26",
+      "selected": [
+        "R002"
+      ],
+      "expected": [],
+      "observed": [],
+      "missing": [],
+      "unexpected": [],
+      "completion": "complete",
+      "passed": true,
+      "diagnostics": [],
+      "rationale": "When a seed is requested, the module calls torch.manual_seed, enables cudnn.deterministic, and disables cudnn.benchmark."
     }
   ],
   "passed": true,

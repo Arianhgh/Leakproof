@@ -22,8 +22,10 @@ Status: unpublished and untagged; local release validation is documented in
   scikit-learn 1.7 score calculations. Preserve destination provenance for NumPy
   `out=` writes and masked/multiple outputs; bookkeeping failures never repeat
   a successful in-place numeric operation.
-- Expand regression tests and independently reviewed source scopes across five
-  pinned repositories; replace the obsolete M002 label with a reasoned negative.
+- Expand the independently reviewed corpus to 21 source scopes across seven
+  pinned repositories. Replace the obsolete M002 label with a reasoned negative
+  and distinguish paired train/test diagnostic scores from M004 training-only
+  evaluation claims.
 - Fingerprint benchmark source inputs and smoke-test base and extra installations
   from both wheel and source archive without publishing.
 

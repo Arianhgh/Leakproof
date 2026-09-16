@@ -137,6 +137,32 @@ y_train = y_test
     assert "M004" in _ids(reassigned_after_metric, tmp_path)
 
 
+def test_m004_allows_train_score_when_same_model_has_held_out_score(tmp_path):
+    diagnostic_comparison = """
+from sklearn.metrics import accuracy_score
+from sklearn.model_selection import train_test_split
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, random_state=0)
+model.fit(X_train, y_train)
+print(model.score(X_train, y_train))
+print(model.score(X_test, y_test))
+print(accuracy_score(y_train, model.predict(X_train)))
+print(accuracy_score(y_test, model.predict(X_test)))
+"""
+    assert "M004" not in _ids(diagnostic_comparison, tmp_path)
+
+    different_estimators = """
+from sklearn.model_selection import train_test_split
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, random_state=0)
+first.fit(X_train, y_train)
+second.fit(X_train, y_train)
+print(first.score(X_train, y_train))
+print(second.score(X_test, y_test))
+"""
+    assert "M004" in _ids(different_estimators, tmp_path)
+
+
 def test_m002_does_not_link_reassigned_validation_curve_to_test(tmp_path):
     src = """
 from sklearn.metrics import roc_curve

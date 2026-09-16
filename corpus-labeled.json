@@ -1,5 +1,5 @@
 {
-  "description": "Reviewed, rule-specific source scopes from five pinned public repositories; not exhaustive repository ground truth. Cell indices are zero-based.",
+  "description": "Reviewed, rule-specific source scopes from seven pinned public repositories; not exhaustive repository ground truth. Cell indices are zero-based.",
   "repos": [
     {
       "name": "scikit-learn-videos",
@@ -54,6 +54,38 @@
           ],
           "expected": [],
           "rationale": "The ROC curve is plotted and fixed thresholds 0.5 and 0.3 are inspected. No threshold is selected from curve metrics. This replaces the obsolete M002-positive label; it does not certify the wider experiment."
+        },
+        {
+          "id": "videos-seeded-holdout",
+          "path": "05_model_evaluation.ipynb",
+          "cells": [
+            23
+          ],
+          "select": [
+            "R001"
+          ],
+          "expected": [],
+          "rationale": "The holdout split supplies an explicit random_state, so the missing-seed advisory must remain silent."
+        },
+        {
+          "id": "videos-pipeline-cv-mean-only",
+          "path": "10_categorical_features.ipynb",
+          "cells": [
+            44,
+            45,
+            46,
+            47,
+            48
+          ],
+          "select": [
+            "C001",
+            "M003",
+            "R001"
+          ],
+          "expected": [
+            "M003"
+          ],
+          "rationale": "The column transformer is isolated inside the cross-validation pipeline and the estimator is deterministic for its configured solver, but the displayed CV summary is a mean with no spread."
         }
       ],
       "expected_rule_ids": [
@@ -156,6 +188,65 @@
           ],
           "expected": [],
           "rationale": "argmin chooses the threshold nearest a fixed zero, not a threshold optimizing test metrics."
+        },
+        {
+          "id": "book-training-only-scaling",
+          "path": "03-unsupervised-learning.ipynb",
+          "cells": [
+            4,
+            5,
+            6,
+            7,
+            8
+          ],
+          "select": [
+            "S001",
+            "P001",
+            "R001"
+          ],
+          "expected": [],
+          "rationale": "The seeded holdout is created before MinMaxScaler is fit on X_train, and that fitted scaler is reused for X_test."
+        },
+        {
+          "id": "book-training-only-pca",
+          "path": "03-unsupervised-learning.ipynb",
+          "cells": [
+            31,
+            33
+          ],
+          "select": [
+            "S001",
+            "P001",
+            "R001"
+          ],
+          "expected": [],
+          "rationale": "The split and PCA are seeded, PCA is fit only on X_train, and the learned transform is then applied to both partitions."
+        },
+        {
+          "id": "book-search-with-holdout",
+          "path": "07-working-with-text-data.ipynb",
+          "cells": [
+            23,
+            24
+          ],
+          "select": [
+            "C005"
+          ],
+          "expected": [],
+          "rationale": "Although best_score_ is displayed, the selected search is also evaluated on an independently transformed held-out test set in the same scope."
+        },
+        {
+          "id": "book-train-and-test-diagnostic-scores",
+          "path": "02-supervised-learning.ipynb",
+          "cells": [
+            17,
+            81
+          ],
+          "select": [
+            "M004"
+          ],
+          "expected": [],
+          "rationale": "Training accuracy is shown directly beside held-out accuracy to diagnose generalization; the training score is not presented as the evaluation result."
         }
       ]
     },
@@ -197,6 +288,75 @@
           ],
           "expected": [],
           "rationale": "The module implements its own local splitting functions. It does not call an imported sklearn splitter or fit learned preprocessing before a split."
+        }
+      ]
+    },
+    {
+      "name": "category-encoders",
+      "url": "https://github.com/scikit-learn-contrib/category_encoders",
+      "commit": "fafdccced2c5154478a5f10cd761e138daa56d21",
+      "domain": "categorical",
+      "cases": [
+        {
+          "id": "encoders-pipeline-grid-search",
+          "path": "examples/grid_search_example.py",
+          "select": [
+            "C001",
+            "C005",
+            "M003",
+            "R001"
+          ],
+          "expected": [],
+          "rationale": "Encoding and scaling are inside the GridSearchCV pipeline, the split and estimator are seeded, fold means are paired with standard deviations, and final predictions use the holdout set."
+        },
+        {
+          "id": "encoders-transform-before-cv",
+          "path": "examples/encoding_examples.py",
+          "select": [
+            "C001"
+          ],
+          "expected": [
+            "C001"
+          ],
+          "rationale": "The encoder and StandardScaler are fit to all rows before their transformed output enters cross_validate; the source comment explicitly notes that normalization should be trained per fold."
+        },
+        {
+          "id": "encoders-no-evaluation-boundary",
+          "path": "examples/column_transformer_example.py",
+          "select": [
+            "C006",
+            "P001"
+          ],
+          "expected": [],
+          "rationale": "This transformation-only example fits a TargetEncoder but defines no train/test or cross-validation boundary, so the scoped source does not support a leakage claim."
+        }
+      ]
+    },
+    {
+      "name": "pytorch-examples",
+      "url": "https://github.com/pytorch/examples",
+      "commit": "acc295dc7b90714f1bf47f06004fc19a7fe235c4",
+      "domain": "deep-learning",
+      "cases": [
+        {
+          "id": "pytorch-mnist-seed-without-determinism",
+          "path": "mnist/main.py",
+          "select": [
+            "R002"
+          ],
+          "expected": [
+            "R002"
+          ],
+          "rationale": "The example sets torch.manual_seed but does not enable deterministic algorithms or a deterministic backend mode."
+        },
+        {
+          "id": "pytorch-imagenet-deterministic-mode",
+          "path": "imagenet/main.py",
+          "select": [
+            "R002"
+          ],
+          "expected": [],
+          "rationale": "When a seed is requested, the module calls torch.manual_seed, enables cudnn.deterministic, and disables cudnn.benchmark."
         }
       ]
     }

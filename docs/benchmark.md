@@ -65,7 +65,7 @@ being presented as complete evidence.
 
 ## Reviewed real-world regression cases
 
-`corpus-labeled.json` contains ten reviewed source scopes across all five pinned
+`corpus-labeled.json` contains 21 reviewed source scopes across seven pinned
 repositories. Each case records its path, zero-based notebook cells (or Python
 file), selected rules, positive/negative expectation, and reasoning. The runner
 extracts original source text in stored order and hashes the exact excerpt; it
@@ -81,9 +81,11 @@ python -m tests.corpus.labeled --offline
 
 The cases include global feature selection before CV, preprocessing before a
 holdout split, pipeline-based clean CV, training-only text vocabularies, mean-only
-CV reporting, search-score reuse, and fixed-threshold plots. Missing expected
-findings, unexpected selected findings, checkout failures, and incomplete case
-analysis all fail this regression gate.
+CV reporting, search-score reuse, paired train/test diagnostics, target encoders,
+and PyTorch determinism settings. Missing expected findings, unexpected selected
+findings, checkout failures, and incomplete case analysis all fail this regression
+gate. The larger sample remains a regression corpus, not a statistically
+representative benchmark or a basis for broad precision/recall claims.
 
 The old `M002` label for `09_classification_metrics.ipynb` was incorrect under the
 current rule contract: the notebook plots an ROC curve and compares fixed

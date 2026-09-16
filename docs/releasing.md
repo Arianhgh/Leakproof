@@ -60,9 +60,9 @@ previously committed benchmark.
 ## Scope of the evidence
 
 Passing these checks establishes tested functionality and installation behavior.
-The synthetic benchmark is a regression suite; the ten labeled real-world
-source scopes are still a small sample. Static analysis does not reconstruct
-arbitrary execution, notebook execution history, or external modules. Runtime
+The synthetic benchmark is a regression suite; the 21 labeled real-world
+source scopes are still a modest, deliberately selected sample. Static analysis
+does not reconstruct arbitrary execution, notebook execution history, or external modules. Runtime
 hooks apply to supported operations in the current process. Unavailable or
 unsupported analysis remains explicit in diagnostics and completion status.
 Optional LLM providers are tested with injected clients without making network

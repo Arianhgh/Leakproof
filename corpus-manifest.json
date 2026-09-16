@@ -5,6 +5,8 @@
     {"name": "pycon-2016-tutorial", "url": "https://github.com/justmarkham/pycon-2016-tutorial", "commit": "5339710562cc46c4a32a369d63f1e8751a18a54e", "domain": "nlp"},
     {"name": "intro-to-ml-sklearn", "url": "https://github.com/amueller/introduction_to_ml_with_python", "commit": "ea60cf6cf791553b6cca7cf31802c68cb3798ebb", "domain": "tabular"},
     {"name": "ml-with-python", "url": "https://github.com/susanli2016/Machine-Learning-with-Python", "commit": "87cbe5caa5ce6c219ad92bb0c720f06aaf9c8773", "domain": "mixed"},
-    {"name": "ds-from-scratch", "url": "https://github.com/joelgrus/data-science-from-scratch", "commit": "d5d0f117f41b3ccab3b07f1ee1fa21cfcf69afa1", "domain": "tabular"}
+    {"name": "ds-from-scratch", "url": "https://github.com/joelgrus/data-science-from-scratch", "commit": "d5d0f117f41b3ccab3b07f1ee1fa21cfcf69afa1", "domain": "tabular"},
+    {"name": "category-encoders", "url": "https://github.com/scikit-learn-contrib/category_encoders", "commit": "fafdccced2c5154478a5f10cd761e138daa56d21", "domain": "categorical"},
+    {"name": "pytorch-examples", "url": "https://github.com/pytorch/examples", "commit": "acc295dc7b90714f1bf47f06004fc19a7fe235c4", "domain": "deep-learning"}
   ]
 }

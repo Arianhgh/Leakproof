@@ -33,13 +33,27 @@ def _arg_taint(node: ast.Call, index: int, ctx: StaticContext) -> Taint:
             else ("y_pred", "pred", "prediction", "output", "scores")
         )
         observed = [
-            record.keyword_taints[name]
-            for name in keyword_names
-            if name in record.keyword_taints
+            record.keyword_taints[name] for name in keyword_names if name in record.keyword_taints
         ]
         if observed:
             return ctx.dataflow._merge_taints(observed)
     return Taint.UNKNOWN
+
+
+def _metric_identity(
+    node: ast.Call, tail: str, ctx: StaticContext
+) -> tuple[str, int, str | None, int | None]:
+    """Identify comparable metric calls without conflating different estimators."""
+
+    record = next((call for call in ctx.dataflow.calls if call.node is node), None)
+    if tail != "score":
+        return (tail, record.scope_id if record is not None else 0, None, None)
+    return (
+        tail,
+        record.scope_id if record is not None else 0,
+        record.receiver_var if record is not None else None,
+        record.receiver_binding_version if record is not None else None,
+    )
 
 
 @register
@@ -57,6 +71,14 @@ class M004(StaticRule, RuntimeRule):
 
     def check(self, ctx: StaticContext) -> Iterable[Finding]:
         metrics = ctx.adapters.metrics
+        calls: list[
+            tuple[
+                ast.Call,
+                str,
+                tuple[str, int, str | None, int | None],
+                list[Taint],
+            ]
+        ] = []
         for node in ast.walk(ctx.tree):
             if not isinstance(node, ast.Call):
                 continue
@@ -64,12 +86,33 @@ class M004(StaticRule, RuntimeRule):
             tail = fname.rsplit(".", 1)[-1] if fname else None
             if tail in metrics:
                 y_true_idx, _ = metrics[tail]
-                if _arg_taint(node, y_true_idx, ctx) is Taint.TRAIN:
-                    yield self._make(node, ctx, tail)
+                calls.append(
+                    (
+                        node,
+                        tail,
+                        _metric_identity(node, tail, ctx),
+                        [_arg_taint(node, y_true_idx, ctx)],
+                    )
+                )
                 continue
             if isinstance(node.func, ast.Attribute) and node.func.attr == "score":
-                if any(_arg_taint(node, i, ctx) is Taint.TRAIN for i in range(2)):
-                    yield self._make(node, ctx, "score")
+                calls.append(
+                    (
+                        node,
+                        "score",
+                        _metric_identity(node, "score", ctx),
+                        [_arg_taint(node, i, ctx) for i in range(2)],
+                    )
+                )
+
+        held_out_metrics = {
+            identity
+            for _, _, identity, taints in calls
+            if any(taint.is_eval_side for taint in taints)
+        }
+        for node, tail, identity, taints in calls:
+            if Taint.TRAIN in taints and identity not in held_out_metrics:
+                yield self._make(node, ctx, tail)
 
     def _make(self, node: ast.AST, ctx: StaticContext, what: str) -> Finding:
         return Finding(
@@ -84,7 +127,9 @@ class M004(StaticRule, RuntimeRule):
             location=location_of(node, ctx),
             confidence=0.7,
             references=self.references,
-            fix=Fix(summary="Evaluate on X_test/y_test, not the training split.", autofixable=False),
+            fix=Fix(
+                summary="Evaluate on X_test/y_test, not the training split.", autofixable=False
+            ),
             evidence={"what": what},
         )
 
@@ -143,11 +188,7 @@ class M002(StaticRule):
             if tail not in self._CURVE_FUNCS:
                 continue
             call = next(
-                (
-                    record
-                    for record in ctx.dataflow.calls
-                    if record.node is node
-                ),
+                (record for record in ctx.dataflow.calls if record.node is node),
                 None,
             )
             if (
@@ -168,7 +209,10 @@ class M002(StaticRule):
                     location=location_of(node, ctx),
                     confidence=0.5,
                     references=self.references,
-                    fix=Fix(summary="Select the threshold on validation, evaluate on test once.", autofixable=False),
+                    fix=Fix(
+                        summary="Select the threshold on validation, evaluate on test once.",
+                        autofixable=False,
+                    ),
                     evidence={"func": tail},
                 )
 
